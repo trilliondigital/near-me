@@ -58,7 +58,7 @@
 
 ## Phase 3: Location Services and Geofencing
 
-- [ ] 7. Implement iOS location services and geofencing
+- [x] 7. Implement iOS location services and geofencing
   - Set up CoreLocation framework with significant-change monitoring
   - Implement geofence registration using CLLocationManager
   - Create location permission handling with graceful degradation
@@ -68,7 +68,7 @@
   - Write tests using location simulation and mock CLLocationManager
   - _Requirements: 4.1, 4.2, 4.3, 4.4, 8.3, 8.4_
 
-- [ ] 8. Implement Android location services and geofencing
+- [-] 8. Implement Android location services and geofencing
   - Set up FusedLocationProvider with balanced power accuracy
   - Implement GeofencingClient with PendingIntent receivers
   - Create location permission handling and background processing setup
