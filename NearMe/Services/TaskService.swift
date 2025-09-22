@@ -125,6 +125,14 @@ class TaskService: ObservableObject {
         isLoading = true
         error = nil
         
+        // Check task limit before creating
+        let userService = UserService.shared
+        if let taskLimit = userService.taskLimitStatus, taskLimit.isAtLimit {
+            error = .taskLimitExceeded
+            isLoading = false
+            return
+        }
+        
         guard let url = URL(string: "\(baseURL)/tasks") else {
             error = .networkError("Invalid URL")
             isLoading = false
@@ -158,6 +166,12 @@ class TaskService: ObservableObject {
                 receiveValue: { [weak self] response in
                     if response.success {
                         self?.tasks.insert(response.data, at: 0)
+                        // Update user service task limit status
+                        UserService.shared.checkTaskLimit()
+                            .sink(receiveCompletion: { _ in }, receiveValue: { status in
+                                UserService.shared.taskLimitStatus = status
+                            })
+                            .store(in: &self?.cancellables ?? Set<AnyCancellable>())
                         // Refresh tasks to get updated list
                         self?.fetchTasks()
                     } else {

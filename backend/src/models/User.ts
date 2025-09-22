@@ -167,6 +167,13 @@ export class User {
   }
 
   /**
+   * Get maximum active tasks allowed for user
+   */
+  get maxActiveTasks(): number {
+    return this.isPremium() ? Number.MAX_SAFE_INTEGER : 3;
+  }
+
+  /**
    * Get active task count for freemium limits
    */
   async getActiveTaskCount(): Promise<number> {
@@ -265,11 +272,11 @@ export class User {
    * Update push notification token for user
    */
   static async updatePushToken(userId: string, deviceToken: string, platform: 'ios' | 'android'): Promise<void> {
-    const pushToken: PushNotificationToken = {
-      device_token: deviceToken,
+    const pushToken = {
+      deviceToken: deviceToken,
       platform,
-      is_active: true,
-      last_updated: new Date()
+      isActive: true,
+      lastUpdated: new Date()
     };
 
     await query(
@@ -283,7 +290,7 @@ export class User {
    */
   static async findUsersWithPushTokens(): Promise<User[]> {
     const result = await query<UserEntity>(
-      'SELECT * FROM users WHERE push_token IS NOT NULL AND (push_token->>\'is_active\')::boolean = true'
+      'SELECT * FROM users WHERE push_token IS NOT NULL AND (push_token->>\'isActive\')::boolean = true'
     );
 
     return result.rows.map(row => new User(row));
@@ -294,7 +301,7 @@ export class User {
    */
   static async deactivatePushToken(userId: string): Promise<void> {
     await query(
-      'UPDATE users SET push_token = jsonb_set(push_token, \'{is_active}\', \'false\'), updated_at = NOW() WHERE id = $1',
+      'UPDATE users SET push_token = jsonb_set(push_token, \'{isActive}\', \'false\'), updated_at = NOW() WHERE id = $1',
       [userId]
     );
   }

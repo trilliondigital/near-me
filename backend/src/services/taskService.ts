@@ -37,6 +37,12 @@ export class TaskService {
       throw new ValidationError('User not found', []);
     }
 
+    // Check if user can create more tasks (freemium limit)
+    const canCreate = await user.canCreateTask();
+    if (!canCreate) {
+      throw new ValidationError('Free users are limited to 3 active tasks. Upgrade to premium for unlimited tasks.', []);
+    }
+
     // Create the task
     const task = await Task.create(userId, data);
 

@@ -147,9 +147,6 @@
 
 ## Phase 6: Onboarding and User Experience
 
-- [x] 16. Implement user onboarding flow
-  - Create welcome screens with app concept explanation and visual examples
-  - Build onboarding questionnaire for user preferences and common locations
   - Implement permission request flows with clear explanations and benefits
   - Create onboarding preview showing how notifications will appear
   - Build seed task examples and quick-add functionality for common scenarios

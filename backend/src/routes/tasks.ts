@@ -9,12 +9,12 @@ const router = Router();
 // Apply authentication middleware to all routes
 router.use(authenticateToken);
 
+import { User } from '../models/User';
+
 // Extend Request interface to include user
 interface AuthenticatedRequest extends Request {
-  user?: {
-    id: string;
-    device_id: string;
-  };
+  user?: User;
+  sessionId?: string;
 }
 
 /**

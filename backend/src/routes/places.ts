@@ -21,13 +21,13 @@ router.get('/', async (req: Request, res: Response) => {
     const userId = req.user!.id;
     const places = await placeService.getUserPlaces(userId);
     
-    res.json({
+    return res.json({
       success: true,
       data: places.map(place => place.toJSON()),
     });
   } catch (error) {
     console.error('Error getting places:', error);
-    res.status(500).json({
+    return res.status(500).json({
       success: false,
       error: 'Failed to get places',
     });
@@ -57,7 +57,7 @@ router.get('/:id', async (req: Request, res: Response) => {
     });
   } catch (error) {
     console.error('Error getting place:', error);
-    res.status(500).json({
+    return res.status(500).json({
       success: false,
       error: 'Failed to get place',
     });
@@ -91,7 +91,7 @@ router.post('/', async (req: Request, res: Response) => {
       });
     }
     
-    res.status(500).json({
+    return res.status(500).json({
       success: false,
       error: 'Failed to create place',
     });
@@ -133,7 +133,7 @@ router.put('/:id', async (req: Request, res: Response) => {
       });
     }
     
-    res.status(500).json({
+    return res.status(500).json({
       success: false,
       error: 'Failed to update place',
     });
@@ -171,7 +171,7 @@ router.delete('/:id', async (req: Request, res: Response) => {
       });
     }
     
-    res.status(500).json({
+    return res.status(500).json({
       success: false,
       error: 'Failed to delete place',
     });
@@ -201,7 +201,7 @@ router.get('/search', async (req: Request, res: Response) => {
     });
   } catch (error) {
     console.error('Error searching places:', error);
-    res.status(500).json({
+    return res.status(500).json({
       success: false,
       error: 'Failed to search places',
     });
@@ -237,7 +237,7 @@ router.get('/nearby', async (req: Request, res: Response) => {
       });
     }
     
-    res.status(500).json({
+    return res.status(500).json({
       success: false,
       error: 'Failed to find nearby places',
     });
@@ -275,7 +275,7 @@ router.post('/from-address', async (req: Request, res: Response) => {
       });
     }
     
-    res.status(500).json({
+    return res.status(500).json({
       success: false,
       error: 'Failed to create place from address',
     });
@@ -296,7 +296,7 @@ router.get('/stats', async (req: Request, res: Response) => {
     });
   } catch (error) {
     console.error('Error getting place stats:', error);
-    res.status(500).json({
+    return res.status(500).json({
       success: false,
       error: 'Failed to get place statistics',
     });
@@ -332,7 +332,7 @@ router.post('/geocode', async (req: Request, res: Response) => {
     });
   } catch (error) {
     console.error('Error geocoding address:', error);
-    res.status(500).json({
+    return res.status(500).json({
       success: false,
       error: 'Failed to geocode address',
     });
@@ -376,7 +376,7 @@ router.post('/reverse-geocode', async (req: Request, res: Response) => {
       });
     }
     
-    res.status(500).json({
+    return res.status(500).json({
       success: false,
       error: 'Failed to reverse geocode coordinates',
     });

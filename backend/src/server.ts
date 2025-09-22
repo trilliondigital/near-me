@@ -11,6 +11,7 @@ import { placeRoutes } from './routes/places';
 import { poiRoutes } from './routes/poi';
 import { geofenceRoutes } from './routes/geofences';
 import { healthRoutes } from './routes/health';
+import userRoutes from './routes/userRoutes';
 import notificationRoutes from './routes/notifications';
 import notificationPersistenceRoutes from './routes/notificationPersistence';
 import notificationManagerRoutes from './routes/notificationManager';
@@ -42,6 +43,7 @@ app.use(express.urlencoded({ extended: true }));
 // API routes
 app.use('/api/health', healthRoutes);
 app.use('/api/auth', authRoutes);
+app.use('/api/user', userRoutes);
 app.use('/api/tasks', taskRoutes);
 app.use('/api/places', placeRoutes);
 app.use('/api/poi', poiRoutes);
