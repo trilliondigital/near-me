@@ -1,6 +1,6 @@
 import { PlaceEntity, CreatePlaceRequest, UpdatePlaceRequest, GeofenceRadii, PlaceType } from './types';
-import { validatePlace, validateUpdatePlace, ValidationError } from './validation';
-import { getDatabase } from '../database/connection';
+import { ValidationError } from './validation';
+import { query } from '../database/connection';
 
 export class Place {
   public id: string;
@@ -28,9 +28,9 @@ export class Place {
   }
 
   public static fromCreateRequest(userId: string, request: CreatePlaceRequest): Omit<PlaceEntity, 'id' | 'created_at' | 'updated_at'> {
-    const validation = validatePlace(request);
-    if (validation.error) {
-      throw new Error(`Invalid place data: ${validation.error.details[0].message}`);
+    // Basic validation
+    if (!request.name || !request.latitude || !request.longitude || !request.place_type) {
+      throw new ValidationError('Missing required fields', []);
     }
 
     const defaultRadii: GeofenceRadii = request.default_radii || Place.getDefaultRadiiForType(request.place_type);
@@ -47,9 +47,9 @@ export class Place {
   }
 
   public static fromUpdateRequest(request: UpdatePlaceRequest): Partial<PlaceEntity> {
-    const validation = validateUpdatePlace(request);
-    if (validation.error) {
-      throw new Error(`Invalid place update data: ${validation.error.details[0].message}`);
+    // Basic validation - at least one field should be provided
+    if (Object.keys(request).length === 0) {
+      throw new ValidationError('No update fields provided', []);
     }
 
     const updates: Partial<PlaceEntity> = {};
@@ -127,15 +127,15 @@ export class Place {
    * Find place by ID and user ID
    */
   static async findById(id: string, userId?: string): Promise<Place | null> {
-    let query = 'SELECT * FROM places WHERE id = $1';
+    let queryText = 'SELECT * FROM places WHERE id = $1';
     const params = [id];
     
     if (userId) {
-      query += ' AND user_id = $2';
+      queryText += ' AND user_id = $2';
       params.push(userId);
     }
     
-    const result = await getDatabase().query(query, params);
+    const result = await query<PlaceEntity>(queryText, params);
     
     if (result.rows.length === 0) {
       return null;
@@ -148,10 +148,10 @@ export class Place {
    * Find all places for a user
    */
   static async findByUserId(userId: string): Promise<Place[]> {
-    const query = 'SELECT * FROM places WHERE user_id = $1 ORDER BY created_at DESC';
-    const result = await getDatabase().query(query, [userId]);
+    const queryText = 'SELECT * FROM places WHERE user_id = $1 ORDER BY created_at DESC';
+    const result = await query<PlaceEntity>(queryText, [userId]);
     
-    return result.rows.map(row => new Place(row));
+    return result.rows.map((row: PlaceEntity) => new Place(row));
   }
 
   /**
@@ -160,7 +160,7 @@ export class Place {
   static async create(userId: string, data: CreatePlaceRequest): Promise<Place> {
     const placeData = Place.fromCreateRequest(userId, data);
     
-    const query = `
+    const queryText = `
       INSERT INTO places (user_id, name, latitude, longitude, address, place_type, default_radii)
       VALUES ($1, $2, $3, $4, $5, $6, $7)
       RETURNING *
@@ -176,7 +176,7 @@ export class Place {
       JSON.stringify(placeData.default_radii)
     ];
 
-    const result = await getDatabase().query(query, values);
+    const result = await query<PlaceEntity>(queryText, values);
     return new Place(result.rows[0]);
   }
 
@@ -194,7 +194,7 @@ export class Place {
       .map((key, index) => `${key} = $${index + 2}`)
       .join(', ');
     
-    const query = `
+    const queryText = `
       UPDATE places 
       SET ${setClause}, updated_at = NOW()
       WHERE id = $1
@@ -202,7 +202,7 @@ export class Place {
     `;
 
     const values = [this.id, ...Object.values(updates)];
-    const result = await getDatabase().query(query, values);
+    const result = await query<PlaceEntity>(queryText, values);
     
     return new Place(result.rows[0]);
   }
@@ -211,7 +211,7 @@ export class Place {
    * Delete a place
    */
   async delete(): Promise<void> {
-    const query = 'DELETE FROM places WHERE id = $1';
-    await getDatabase().query(query, [this.id]);
+    const queryText = 'DELETE FROM places WHERE id = $1';
+    await query(queryText, [this.id]);
   }
 }
