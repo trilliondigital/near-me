@@ -27,6 +27,11 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
 
     func sceneDidBecomeActive(_ scene: UIScene) {
         // Called when the scene has moved from an inactive state to an active state.
+        Task {
+            if !await AnalyticsService.shared.isSessionActive {
+                await AnalyticsService.shared.startSession()
+            }
+        }
     }
 
     func sceneWillResignActive(_ scene: UIScene) {
@@ -35,9 +40,15 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
 
     func sceneWillEnterForeground(_ scene: UIScene) {
         // Called as the scene transitions from the background to the foreground.
+        Task {
+            if !await AnalyticsService.shared.isSessionActive {
+                await AnalyticsService.shared.startSession()
+            }
+        }
     }
 
     func sceneDidEnterBackground(_ scene: UIScene) {
         // Called as the scene transitions from the foreground to the background.
+        // Don't end session here, just let it timeout naturally
     }
 }

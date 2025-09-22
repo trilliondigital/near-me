@@ -1,6 +1,7 @@
 import { Task } from '../models/Task';
 import { User } from '../models/User';
 import { GeofenceService } from './geofenceService';
+import { analyticsService } from './analyticsService';
 import { 
   CreateTaskRequest, 
   UpdateTaskRequest, 
@@ -49,6 +50,20 @@ export class TaskService {
     // Create geofences for the task if it's active
     if (task.status === 'active') {
       await GeofenceService.createGeofencesForTask(task);
+    }
+
+    // Track analytics event
+    try {
+      await analyticsService.trackTaskCreated(userId, 'session_id_placeholder', {
+        taskId: task.id,
+        locationType: task.location_type,
+        placeId: task.place_id || undefined,
+        poiCategory: task.poi_category || undefined,
+        hasDescription: !!task.description
+      });
+    } catch (error) {
+      // Don't fail task creation if analytics fails
+      console.warn('Failed to track task creation analytics:', error);
     }
 
     return task;
@@ -145,7 +160,7 @@ export class TaskService {
   /**
    * Complete a task
    */
-  static async completeTask(taskId: string, userId: string): Promise<Task> {
+  static async completeTask(taskId: string, userId: string, completionMethod: string = 'app_action'): Promise<Task> {
     const task = await Task.findById(taskId, userId);
     if (!task) {
       throw new ValidationError('Task not found', []);
@@ -155,6 +170,21 @@ export class TaskService {
 
     // Remove geofences when task is completed
     await GeofenceService.removeGeofencesForTask(taskId);
+
+    // Track analytics event
+    try {
+      const timeToCompleteHours = task.created_at ? 
+        (Date.now() - new Date(task.created_at).getTime()) / (1000 * 60 * 60) : undefined;
+      
+      await analyticsService.trackTaskCompleted(userId, 'session_id_placeholder', {
+        taskId: task.id,
+        completionMethod,
+        timeToCompleteHours
+      });
+    } catch (error) {
+      // Don't fail task completion if analytics fails
+      console.warn('Failed to track task completion analytics:', error);
+    }
 
     return completedTask;
   }

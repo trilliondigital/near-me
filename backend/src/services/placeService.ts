@@ -3,6 +3,7 @@ import { Place } from '../models/Place';
 import { PlaceEntity, CreatePlaceRequest, UpdatePlaceRequest, Coordinate } from '../models/types';
 import { GeocodingService } from './geocodingService';
 import { POIService } from './poiService';
+import { analyticsService } from './analyticsService';
 
 export class PlaceService {
   private db: Pool;
@@ -55,7 +56,21 @@ export class PlaceService {
     try {
       const result = await this.db.query(query, values);
       const entity = this.mapRowToEntity(result.rows[0]);
-      return new Place(entity);
+      const place = new Place(entity);
+
+      // Track analytics event
+      try {
+        await analyticsService.trackPlaceAdded(userId, 'session_id_placeholder', {
+          placeId: place.id,
+          placeType: place.place_type,
+          method: request.address ? 'address_search' : 'map_selection'
+        });
+      } catch (error) {
+        // Don't fail place creation if analytics fails
+        console.warn('Failed to track place creation analytics:', error);
+      }
+
+      return place;
     } catch (error) {
       console.error('Error creating place:', error);
       throw new Error('Failed to create place');

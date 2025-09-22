@@ -86,7 +86,22 @@ class TaskCreationViewModel: ObservableObject {
             .sink { [weak self] isLoading in
                 if !isLoading {
                     self?.isCreating = false
-                    completion(self?.taskService.error == nil ?? false)
+                    let success = self?.taskService.error == nil ?? false
+                    
+                    // Track analytics if task creation was successful
+                    if success, let createdTask = self?.taskService.tasks.first {
+                        Task {
+                            await AnalyticsService.shared.trackTaskCreated(
+                                taskId: createdTask.id,
+                                locationType: request.locationType.rawValue,
+                                placeId: request.placeId,
+                                poiCategory: request.poiCategory?.rawValue,
+                                hasDescription: request.description != nil
+                            )
+                        }
+                    }
+                    
+                    completion(success)
                 }
             }
             .store(in: &cancellables)

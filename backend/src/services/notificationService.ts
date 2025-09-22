@@ -16,6 +16,7 @@ import {
 } from '../models/types';
 import { ValidationError } from '../models/validation';
 import { NotificationTemplates } from './notificationTemplates';
+import { analyticsService } from './analyticsService';
 
 export type NotificationType = 'approach' | 'arrival' | 'post_arrival';
 export type NotificationActionType = 'complete' | 'snooze_15m' | 'snooze_1h' | 'snooze_today' | 'open_map' | 'mute';
@@ -225,6 +226,18 @@ export class NotificationService {
         
         if (result.successCount > 0) {
           console.log(`Push notification sent successfully: ${notification.id}`);
+          
+          // Track analytics event for nudge shown
+          try {
+            await analyticsService.trackNudgeShown(notification.userId, 'session_id_placeholder', {
+              taskId: notification.taskId,
+              nudgeType: notification.type,
+              locationName: notification.metadata.placeName,
+              distanceMeters: notification.metadata.distance
+            });
+          } catch (error) {
+            console.warn('Failed to track nudge shown analytics:', error);
+          }
         } else {
           console.log(`Push notification failed: ${notification.id}`, result.errors);
           // Create retry record for failed notifications

@@ -7,6 +7,12 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
     func application(_ application: UIApplication, didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?) -> Bool {
         // Configure push notifications
         configurePushNotifications(application)
+        
+        // Start analytics session
+        Task {
+            await AnalyticsService.shared.startSession()
+        }
+        
         return true
     }
     

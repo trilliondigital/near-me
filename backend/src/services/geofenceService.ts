@@ -12,6 +12,7 @@ import {
   CreateGeofenceRequest 
 } from '../models/types';
 import { ValidationError } from '../models/validation';
+import { analyticsService } from './analyticsService';
 
 export interface GeofenceCalculationResult {
   geofences: CreateGeofenceRequest[];
@@ -74,6 +75,18 @@ export class GeofenceService {
     for (const geofenceData of calculationResult.geofences) {
       const geofence = await Geofence.create(geofenceData);
       createdGeofences.push(geofence);
+
+      // Track analytics event for geofence registration
+      try {
+        await analyticsService.trackGeofenceRegistered(task.user_id, 'session_id_placeholder', {
+          taskId: task.id,
+          geofenceId: geofence.id,
+          geofenceType: geofence.geofence_type,
+          radiusMeters: geofence.radius
+        });
+      } catch (error) {
+        console.warn('Failed to track geofence registration analytics:', error);
+      }
     }
 
     return createdGeofences;
