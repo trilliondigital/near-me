@@ -1,0 +1,21 @@
+# Exclude files from Docker build context
+node_modules
+npm-debug.log
+
+# Git and CI
+.git
+.github
+
+# Local env and logs
+.env
+.env.*
+!.env.production.example
+logs
+coverage
+
+# Build artifacts
+/dist
+
+# OS/editor junk
+.DS_Store
+*.swp

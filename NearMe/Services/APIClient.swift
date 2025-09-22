@@ -19,6 +19,7 @@ class APIClient {
         case decodingError(Error)
         case networkError(Error)
         case serverError(Int, String)
+        case rateLimited(retryAfter: Int?)
         case unauthorized
         
         var errorDescription: String? {
@@ -33,6 +34,9 @@ class APIClient {
                 return "Network error: \(error.localizedDescription)"
             case .serverError(let code, let message):
                 return "Server error (\(code)): \(message)"
+            case .rateLimited(let retryAfter):
+                if let retryAfter = retryAfter { return "Rate limited. Retry after \(retryAfter)s" }
+                return "Rate limited. Please try again shortly"
             case .unauthorized:
                 return "Unauthorized access"
             }
@@ -46,6 +50,17 @@ class APIClient {
         config.timeoutIntervalForRequest = 30
         config.timeoutIntervalForResource = 60
         self.session = URLSession(configuration: config)
+    }
+    
+    struct APIErrorEnvelope: Codable {
+        struct ErrorDetail: Codable {
+            let code: String
+            let message: String
+            let timestamp: String?
+            let requestId: String?
+            let retryAfter: Int?
+        }
+        let error: ErrorDetail
     }
     
     func request<T: Codable>(
@@ -90,42 +105,79 @@ class APIClient {
             }
         }
         
-        do {
-            let (data, response) = try await session.data(for: request)
-            
-            guard let httpResponse = response as? HTTPURLResponse else {
-                throw APIError.networkError(URLError(.badServerResponse))
-            }
-            
-            // Handle HTTP status codes
-            switch httpResponse.statusCode {
-            case 200...299:
-                break
-            case 401:
-                throw APIError.unauthorized
-            case 400...499, 500...599:
-                let errorMessage = String(data: data, encoding: .utf8) ?? "Unknown error"
-                throw APIError.serverError(httpResponse.statusCode, errorMessage)
-            default:
-                throw APIError.networkError(URLError(.badServerResponse))
-            }
-            
-            // Decode response
+        // Retry with exponential backoff for transient errors
+        let maxAttempts = 3
+        var attempt = 0
+        var lastError: Error?
+        
+        while attempt < maxAttempts {
             do {
-                let decoder = JSONDecoder()
-                decoder.dateDecodingStrategy = .iso8601
-                return try decoder.decode(T.self, from: data)
+                let (data, response) = try await session.data(for: request)
+                guard let httpResponse = response as? HTTPURLResponse else {
+                    throw APIError.networkError(URLError(.badServerResponse))
+                }
+                
+                switch httpResponse.statusCode {
+                case 200...299:
+                    // Decode response
+                    do {
+                        let decoder = JSONDecoder()
+                        decoder.dateDecodingStrategy = .iso8601
+                        return try decoder.decode(T.self, from: data)
+                    } catch {
+                        throw APIError.decodingError(error)
+                    }
+                case 401:
+                    throw APIError.unauthorized
+                case 429:
+                    // Try to parse retryAfter from headers or body
+                    let retryAfterHeader = httpResponse.value(forHTTPHeaderField: "Retry-After")
+                    let retryAfter = Int(retryAfterHeader ?? "") ?? (try? JSONDecoder().decode(APIErrorEnvelope.self, from: data).error.retryAfter) ?? nil
+                    throw APIError.rateLimited(retryAfter: retryAfter)
+                case 400...499, 500...599:
+                    // Attempt to parse standardized error
+                    if let envelope = try? JSONDecoder().decode(APIErrorEnvelope.self, from: data) {
+                        throw APIError.serverError(httpResponse.statusCode, envelope.error.message)
+                    } else {
+                        let errorMessage = String(data: data, encoding: .utf8) ?? "Unknown error"
+                        throw APIError.serverError(httpResponse.statusCode, errorMessage)
+                    }
+                default:
+                    throw APIError.networkError(URLError(.badServerResponse))
+                }
             } catch {
-                throw APIError.decodingError(error)
-            }
-            
-        } catch {
-            if error is APIError {
-                throw error
-            } else {
-                throw APIError.networkError(error)
+                lastError = error
+                attempt += 1
+                // Decide if we should retry
+                let shouldRetry: Bool
+                var suggestedDelay: UInt64 = 0
+                if let apiError = error as? APIError {
+                    switch apiError {
+                    case .rateLimited(let retryAfter):
+                        shouldRetry = true
+                        if let retryAfter = retryAfter { suggestedDelay = UInt64(max(retryAfter, 1)) * 1_000_000_000 }
+                    case .serverError(let status, _):
+                        shouldRetry = (500...599).contains(status)
+                    case .networkError:
+                        shouldRetry = true
+                    default:
+                        shouldRetry = false
+                    }
+                } else {
+                    shouldRetry = true
+                }
+                
+                if attempt >= maxAttempts || !shouldRetry {
+                    throw error
+                }
+                
+                // Exponential backoff with jitter
+                let baseDelay: UInt64 = suggestedDelay > 0 ? suggestedDelay : UInt64(pow(2.0, Double(attempt - 1)) * 0.5 * 1_000_000_000)
+                let jitter = UInt64.random(in: 0..<(100_000_000)) // up to 100ms
+                try? await Task.sleep(nanoseconds: baseDelay + jitter)
             }
         }
+        throw lastError ?? APIError.networkError(URLError(.unknown))
     }
     
     private func getAuthHeaders() -> [String: String]? {

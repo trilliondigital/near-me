@@ -62,7 +62,7 @@ export class PlaceService {
       try {
         await analyticsService.trackPlaceAdded(userId, 'session_id_placeholder', {
           placeId: place.id,
-          placeType: place.place_type,
+          placeType: place.placeType,
           method: request.address ? 'address_search' : 'map_selection'
         });
       } catch (error) {
@@ -100,11 +100,15 @@ export class PlaceService {
   /**
    * Get all places for a user
    */
-  async getUserPlaces(userId: string): Promise<Place[]> {
-    const query = 'SELECT * FROM places WHERE user_id = $1 ORDER BY created_at DESC';
+  async getUserPlaces(userId: string, updatedSince?: Date): Promise<Place[]> {
+    const hasDelta = !!updatedSince;
+    const query = hasDelta
+      ? 'SELECT * FROM places WHERE user_id = $1 AND updated_at > $2 ORDER BY updated_at DESC'
+      : 'SELECT * FROM places WHERE user_id = $1 ORDER BY created_at DESC';
+    const params = hasDelta ? [userId, updatedSince] : [userId];
     
     try {
-      const result = await this.db.query(query, [userId]);
+      const result = await this.db.query(query, params);
       return result.rows.map(row => {
         const entity = this.mapRowToEntity(row);
         return new Place(entity);
@@ -194,10 +198,10 @@ export class PlaceService {
       const deleteQuery = 'DELETE FROM places WHERE id = $1 AND user_id = $2';
       const result = await this.db.query(deleteQuery, [id, userId]);
       
-      return result.rowCount > 0;
+      return (result.rowCount ?? 0) > 0;
     } catch (error) {
       console.error('Error deleting place:', error);
-      if (error.message === 'Cannot delete place with active tasks') {
+      if (error instanceof Error && error.message === 'Cannot delete place with active tasks') {
         throw error;
       }
       throw new Error('Failed to delete place');

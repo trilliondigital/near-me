@@ -364,6 +364,42 @@
             </div>
         </div>
 
+        <!-- SLA & Performance -->
+        <div class="dashboard-grid">
+            <div class="card">
+                <div class="card-header">
+                    <h3 class="card-title">API SLA (Last 1h)</h3>
+                </div>
+                <div style="display:flex; gap:2rem; flex-wrap:wrap">
+                    <div>
+                        <div class="metric-label">Success Rate</div>
+                        <div class="metric-value" id="slaSuccessRate">-</div>
+                    </div>
+                    <div>
+                        <div class="metric-label">Avg Latency</div>
+                        <div class="metric-value" id="slaAvgLatency">-</div>
+                    </div>
+                    <div>
+                        <div class="metric-label">p95 Latency</div>
+                        <div class="metric-value" id="slaP95Latency">-</div>
+                    </div>
+                    <div>
+                        <div class="metric-label">5xx Errors</div>
+                        <div class="metric-value" id="slaServerErrors">-</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card">
+                <div class="card-header">
+                    <h3 class="card-title">API Latency (Last 60m)</h3>
+                </div>
+                <div class="chart-container">
+                    <canvas id="slaChart"></canvas>
+                </div>
+            </div>
+        </div>
+
         <!-- Conversion Funnel -->
         <div class="card">
             <div class="card-header">

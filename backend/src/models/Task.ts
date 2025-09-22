@@ -112,11 +112,12 @@ export class Task {
     options: {
       status?: TaskStatus;
       location_type?: LocationType;
+      updated_since?: Date;
       page?: number;
       limit?: number;
     } = {}
   ): Promise<{ tasks: Task[], total: number }> {
-    const { status, location_type, page = 1, limit = 20 } = options;
+    const { status, location_type, updated_since, page = 1, limit = 20 } = options;
     const offset = (page - 1) * limit;
 
     // Build dynamic query
@@ -133,6 +134,12 @@ export class Task {
     if (location_type) {
       whereClause += ` AND location_type = $${paramIndex}`;
       queryParams.push(location_type);
+      paramIndex++;
+    }
+
+    if (updated_since) {
+      whereClause += ` AND updated_at > $${paramIndex}`;
+      queryParams.push(updated_since);
       paramIndex++;
     }
 

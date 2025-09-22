@@ -206,3 +206,9 @@ export async function checkRedisHealth(): Promise<boolean> {
     return false;
   }
 }
+
+// Compatibility export: some services import { db } with query/connect
+export const db = {
+  query: (text: string, params?: any[]) => query(text, params),
+  connect: () => getDatabase().connect(),
+};

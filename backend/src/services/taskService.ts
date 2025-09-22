@@ -15,6 +15,7 @@ export interface TaskFilters {
   status?: TaskStatus;
   location_type?: LocationType;
   poi_category?: POICategory;
+  updated_since?: Date;
   page?: number;
   limit?: number;
 }
@@ -85,6 +86,7 @@ export class TaskService {
     const queryOptions = {
       status: filters.status,
       location_type: filters.location_type,
+      updated_since: filters.updated_since,
       page,
       limit
     };

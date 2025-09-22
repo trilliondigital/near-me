@@ -41,6 +41,15 @@ router.get('/', async (req: AuthenticatedRequest, res: Response, next: NextFunct
       }
     });
 
+    // Optional delta sync filter
+    const updatedSinceParam = req.query.updated_since as string | undefined;
+    if (updatedSinceParam) {
+      const parsed = new Date(updatedSinceParam);
+      if (!isNaN(parsed.getTime())) {
+        (filters as any).updated_since = parsed;
+      }
+    }
+
     const result = await TaskService.getUserTasks(userId, filters);
 
     res.json({

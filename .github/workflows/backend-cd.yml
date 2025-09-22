@@ -1,0 +1,105 @@
+name: Backend CD
+
+on:
+  push:
+    branches: [ main ]
+    paths: [ 'backend/**', 'infra/**', '.github/workflows/backend-cd.yml' ]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write
+
+env:
+  IMAGE_NAME: ghcr.io/${{ github.repository_owner }}/nearme-backend
+
+jobs:
+  build-and-push:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract metadata (tags, labels)
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.IMAGE_NAME }}
+          tags: |
+            type=ref,event=branch
+            type=sha
+            type=raw,value=latest
+
+      - name: Build and push
+        uses: docker/build-push-action@v6
+        with:
+          context: ./backend
+          file: ./backend/Dockerfile
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+
+  deploy:
+    needs: build-and-push
+    runs-on: ubuntu-latest
+    if: ${{ secrets.SSH_HOST && secrets.SSH_USER && secrets.SSH_KEY }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Copy infra files to server
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USER }}
+          key: ${{ secrets.SSH_KEY }}
+          port: ${{ secrets.SSH_PORT || '22' }}
+          source: |
+            infra/**
+            database/init/**
+            backend/.env.production.example
+          target: ${{ secrets.DEPLOY_PATH || '~/nearme' }}
+
+      - name: Deploy via SSH
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USER }}
+          key: ${{ secrets.SSH_KEY }}
+          port: ${{ secrets.SSH_PORT || '22' }}
+          script: |
+            set -euo pipefail
+            export DEPLOY_PATH=${{ secrets.DEPLOY_PATH || '~/nearme' }}
+            export IMAGE_NAME=${{ env.IMAGE_NAME }}
+            # Use 'latest' tag to align with metadata-action tagging
+            export VERSION=latest
+            export GHCR_USER=${{ github.actor }}
+            export GHCR_TOKEN=${{ secrets.GITHUB_TOKEN }}
+            mkdir -p "$DEPLOY_PATH"
+            cd "$DEPLOY_PATH"
+            echo "Logging into GHCR..."
+            echo "$GHCR_TOKEN" | docker login ghcr.io -u "$GHCR_USER" --password-stdin
+            echo "Creating env file if missing..."
+            if [ ! -f backend.env ]; then
+              echo "Please create backend.env from the template and rerun" && exit 1
+            fi
+            echo "Pulling images..."
+            GHCR_OWNER=${{ github.repository_owner }} VERSION=$VERSION docker compose -f infra/docker-compose.prod.yml --env-file backend.env pull
+            echo "Starting stack..."
+            GHCR_OWNER=${{ github.repository_owner }} VERSION=$VERSION docker compose -f infra/docker-compose.prod.yml --env-file backend.env up -d
+            echo "Waiting for services to become healthy..."
+            sleep 10
+            echo "Checking Nginx health..."
+            curl -fsS http://localhost/healthz
+            echo "\nChecking API health..."
+            curl -fsS http://localhost/api/health | jq . || true
+            echo "Deployment verification passed"

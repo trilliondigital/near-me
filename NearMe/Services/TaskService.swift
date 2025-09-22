@@ -7,6 +7,9 @@ class TaskService: ObservableObject {
     
     private let baseURL = "http://localhost:3000/api"
     private var cancellables = Set<AnyCancellable>()
+    private let cache = LocalCache.shared
+    private let offline = OfflineManager.shared
+    private let outbox = OutboxStore.shared
     
     @Published var tasks: [Task] = []
     @Published var isLoading = false
@@ -37,6 +40,7 @@ class TaskService: ObservableObject {
         case taskLimitExceeded
         case unauthorized
         case notFound
+        case queuedOffline(String)
         
         var errorDescription: String? {
             switch self {
@@ -52,6 +56,8 @@ class TaskService: ObservableObject {
                 return "You are not authorized to perform this action"
             case .notFound:
                 return "Task not found"
+            case .queuedOffline(let msg):
+                return msg
             }
         }
     }
@@ -66,11 +72,19 @@ class TaskService: ObservableObject {
     
     // MARK: - Task CRUD Operations
     
-    /// Fetch all tasks for the current user
+    /// Fetch all tasks for the current user (uses cache when offline)
     func fetchTasks(filters: TaskFilters = TaskFilters()) {
         isLoading = true
         error = nil
         
+        // Offline: serve from cache
+        if !offline.isOnline {
+            let cached = cache.loadTasks()
+            self.tasks = cached
+            self.isLoading = false
+            return
+        }
+
         var urlComponents = URLComponents(string: "\(baseURL)/tasks")!
         var queryItems: [URLQueryItem] = []
         
@@ -82,6 +96,10 @@ class TaskService: ObservableObject {
         }
         if let poiCategory = filters.poiCategory {
             queryItems.append(URLQueryItem(name: "poi_category", value: poiCategory.rawValue))
+        }
+        if let updatedSince = filters.updatedSince {
+            let iso = ISO8601DateFormatter().string(from: updatedSince)
+            queryItems.append(URLQueryItem(name: "updated_since", value: iso))
         }
         queryItems.append(URLQueryItem(name: "page", value: String(filters.page)))
         queryItems.append(URLQueryItem(name: "limit", value: String(filters.limit)))
@@ -101,11 +119,24 @@ class TaskService: ObservableObject {
         URLSession.shared.dataTaskPublisher(for: request)
             .map(\.data)
             .decode(type: APIResponse<TaskListResponse>.self, decoder: JSONDecoder())
+            .handleEvents(receiveOutput: { [weak self] response in
+                // Cache tasks and bump last sync timestamp
+                guard let self = self else { return }
+                if response.success {
+                    self.cache.saveTasks(response.data.tasks)
+                    self.cache.updateMetadata { meta in
+                        meta.lastTaskSyncAt = Date()
+                    }
+                }
+            })
             .receive(on: DispatchQueue.main)
             .sink(
                 receiveCompletion: { [weak self] completion in
                     self?.isLoading = false
                     if case .failure(let error) = completion {
+                        // Fallback to cache on failure
+                        let cached = self?.cache.loadTasks() ?? []
+                        self?.tasks = cached
                         self?.error = .networkError(error.localizedDescription)
                     }
                 },
@@ -120,7 +151,7 @@ class TaskService: ObservableObject {
             .store(in: &cancellables)
     }
     
-    /// Create a new task
+    /// Create a new task (queues when offline)
     func createTask(_ request: CreateTaskRequest) {
         isLoading = true
         error = nil
@@ -132,7 +163,19 @@ class TaskService: ObservableObject {
             isLoading = false
             return
         }
-        
+        // If offline, queue operation and return
+        if !offline.isOnline {
+            do {
+                let body = try JSONEncoder().encode(request)
+                enqueueOutbox(endpoint: "/tasks", method: .POST, body: body)
+                self.error = .queuedOffline("Task creation queued – will sync when online")
+            } catch {
+                self.error = .validationError("Failed to encode request")
+            }
+            self.isLoading = false
+            return
+        }
+
         guard let url = URL(string: "\(baseURL)/tasks") else {
             error = .networkError("Invalid URL")
             isLoading = false
@@ -186,11 +229,34 @@ class TaskService: ObservableObject {
             .store(in: &cancellables)
     }
     
-    /// Update an existing task
+    /// Update an existing task (queues when offline, optimistic local update)
     func updateTask(id: String, request: UpdateTaskRequest) {
         isLoading = true
         error = nil
         
+        if !offline.isOnline {
+            do {
+                let body = try JSONEncoder().encode(request)
+                enqueueOutbox(endpoint: "/tasks/\(id)", method: .PUT, body: body)
+                // Optimistically update local cache and published tasks
+                var current = cache.loadTasks()
+                if let idx = current.firstIndex(where: { $0.id == id }) {
+                    // Build a patched Task locally with minimal fields
+                    var t = current[idx]
+                    if let title = request.title { t = Task(id: t.id, userId: t.userId, title: title, description: t.description, locationType: t.locationType, placeId: t.placeId, poiCategory: t.poiCategory, customRadii: t.customRadii, status: t.status, createdAt: t.createdAt, completedAt: t.completedAt, updatedAt: Date()) }
+                    if let status = request.status { t = Task(id: t.id, userId: t.userId, title: t.title, description: t.description, locationType: t.locationType, placeId: t.placeId, poiCategory: t.poiCategory, customRadii: t.customRadii, status: status, createdAt: t.createdAt, completedAt: t.completedAt, updatedAt: Date()) }
+                    current[idx] = t
+                    cache.saveTasks(current)
+                    DispatchQueue.main.async { self.tasks = current }
+                }
+                self.error = .queuedOffline("Task update queued – will sync when online")
+            } catch {
+                self.error = .validationError("Failed to encode request")
+            }
+            self.isLoading = false
+            return
+        }
+
         guard let url = URL(string: "\(baseURL)/tasks/\(id)") else {
             error = .networkError("Invalid URL")
             isLoading = false
@@ -277,11 +343,23 @@ class TaskService: ObservableObject {
         updateTask(id: id, request: request)
     }
     
-    /// Delete a task
+    /// Delete a task (queues when offline, optimistic local delete)
     func deleteTask(id: String) {
         isLoading = true
         error = nil
         
+        if !offline.isOnline {
+            enqueueOutbox(endpoint: "/tasks/\(id)", method: .DELETE, body: nil)
+            // Optimistically remove from cache and published list
+            var current = cache.loadTasks()
+            current.removeAll { $0.id == id }
+            cache.saveTasks(current)
+            DispatchQueue.main.async { self.tasks = current }
+            self.error = .queuedOffline("Task deletion queued – will sync when online")
+            self.isLoading = false
+            return
+        }
+
         guard let url = URL(string: "\(baseURL)/tasks/\(id)") else {
             error = .networkError("Invalid URL")
             isLoading = false
@@ -350,5 +428,21 @@ class TaskService: ObservableObject {
     /// Clear error state
     func clearError() {
         error = nil
+    }
+
+    // MARK: - Outbox helper
+    private func enqueueOutbox(endpoint: String, method: OutboxOperation.Method, body: Data?) {
+        var headers: [String: String] = ["Content-Type": "application/json", "Accept": "application/json"]
+        getAuthHeaders().forEach { headers[$0.key] = $0.value }
+        let op = OutboxOperation(
+            id: UUID().uuidString,
+            endpoint: endpoint,
+            method: method,
+            body: body,
+            headers: headers,
+            createdAt: Date(),
+            retryCount: 0
+        )
+        outbox.enqueue(op)
     }
 }

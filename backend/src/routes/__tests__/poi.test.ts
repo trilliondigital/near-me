@@ -4,34 +4,6 @@ import { poiRoutes } from '../poi';
 import { POIService } from '../../services/poiService';
 import { POI } from '../../models/POI';
 import { POICategory } from '../../models/types';
-import { it } from 'node:test';
-import { it } from 'node:test';
-import { it } from 'node:test';
-import { it } from 'node:test';
-import { describe } from 'node:test';
-import { it } from 'node:test';
-import { it } from 'node:test';
-import { describe } from 'node:test';
-import { it } from 'node:test';
-import { it } from 'node:test';
-import { it } from 'node:test';
-import { it } from 'node:test';
-import { describe } from 'node:test';
-import { it } from 'node:test';
-import { it } from 'node:test';
-import { it } from 'node:test';
-import { describe } from 'node:test';
-import { it } from 'node:test';
-import { it } from 'node:test';
-import { it } from 'node:test';
-import { it } from 'node:test';
-import { it } from 'node:test';
-import { describe } from 'node:test';
-import { it } from 'node:test';
-import { it } from 'node:test';
-import { describe } from 'node:test';
-import { beforeEach } from 'node:test';
-import { describe } from 'node:test';
 
 // Mock dependencies
 jest.mock('../../services/poiService');
@@ -65,8 +37,10 @@ describe('POI Routes', () => {
     MockedPOIService.mockImplementation(() => mockPOIService);
 
     // Mock POI static methods
-    (POI.getAllCategories as jest.Mock) = jest.fn().mockReturnValue(['gas', 'pharmacy', 'grocery', 'bank', 'post_office']);
-    (POI.getCategoryDisplayName as jest.Mock) = jest.fn().mockImplementation((category) => {
+    (POI.getAllCategories as unknown as jest.Mock) = jest
+      .fn()
+      .mockReturnValue(['gas', 'pharmacy', 'grocery', 'bank', 'post_office']);
+    (POI.getCategoryDisplayName as unknown as jest.Mock) = jest.fn().mockImplementation((category) => {
       const names: Record<string, string> = {
         gas: 'Gas Station',
         pharmacy: 'Pharmacy',
@@ -76,7 +50,7 @@ describe('POI Routes', () => {
       };
       return names[category];
     });
-    (POI.isValidCategory as jest.Mock) = jest.fn().mockImplementation((category) => {
+    (POI.isValidCategory as unknown as jest.Mock) = jest.fn().mockImplementation((category: string) => {
       return ['gas', 'pharmacy', 'grocery', 'bank', 'post_office'].includes(category);
     });
 
@@ -162,7 +136,7 @@ describe('POI Routes', () => {
     });
 
     it('should return 400 for invalid category', async () => {
-      (POI.isValidCategory as jest.Mock).mockReturnValue(false);
+      (POI.isValidCategory as unknown as jest.Mock).mockReturnValue(false);
 
       const response = await request(app).get('/poi/search?latitude=37.7749&longitude=-122.4194&radius=5&category=invalid');
 
@@ -225,7 +199,7 @@ describe('POI Routes', () => {
     });
 
     it('should return 400 for invalid category', async () => {
-      (POI.isValidCategory as jest.Mock).mockReturnValue(false);
+      (POI.isValidCategory as unknown as jest.Mock).mockReturnValue(false);
 
       const response = await request(app).get('/poi/category/invalid?latitude=37.7749&longitude=-122.4194&radius=10');
 
@@ -382,8 +356,8 @@ describe('POI Routes', () => {
 
   describe('POST /poi/validate-category', () => {
     it('should validate valid category', async () => {
-      (POI.isValidCategory as jest.Mock).mockReturnValue(true);
-      (POI.getCategoryDisplayName as jest.Mock).mockReturnValue('Gas Station');
+      (POI.isValidCategory as unknown as jest.Mock).mockReturnValue(true);
+      (POI.getCategoryDisplayName as unknown as jest.Mock).mockReturnValue('Gas Station');
 
       const response = await request(app).post('/poi/validate-category').send({ category: 'gas' });
 
@@ -399,7 +373,7 @@ describe('POI Routes', () => {
     });
 
     it('should validate invalid category', async () => {
-      (POI.isValidCategory as jest.Mock).mockReturnValue(false);
+      (POI.isValidCategory as unknown as jest.Mock).mockReturnValue(false);
 
       const response = await request(app).post('/poi/validate-category').send({ category: 'invalid' });
 
@@ -425,7 +399,7 @@ describe('POI Routes', () => {
     });
 
     it('should handle service errors', async () => {
-      (POI.isValidCategory as jest.Mock).mockImplementation(() => {
+      (POI.isValidCategory as unknown as jest.Mock).mockImplementation(() => {
         throw new Error('Service error');
       });
 

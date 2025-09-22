@@ -41,7 +41,9 @@ export const createRateLimit = (options: {
     },
     standardHeaders: true,
     legacyHeaders: false,
-    handler: (req, res) => {
+    handler: (req: Request, res: Response) => {
+      // Provide standard Retry-After header in seconds
+      res.setHeader('Retry-After', String(Math.ceil(windowMs / 1000)));
       res.status(429).json({
         error: {
           code: 'RATE_LIMITED',
@@ -97,7 +99,7 @@ export const speedLimiter = slowDown({
  */
 export function sanitizeString(input: string): string {
   if (typeof input !== 'string') {
-    throw new ValidationError('Input must be a string');
+    throw new ValidationError('Input must be a string', []);
   }
 
   return input
@@ -123,11 +125,11 @@ export function sanitizeEmail(email: string): string {
   const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
   
   if (!emailRegex.test(sanitized)) {
-    throw new ValidationError('Invalid email format');
+    throw new ValidationError('Invalid email format', []);
   }
   
   if (sanitized.length > 254) {
-    throw new ValidationError('Email address too long');
+    throw new ValidationError('Email address too long', []);
   }
   
   return sanitized;
@@ -140,15 +142,15 @@ export function sanitizeNumber(input: any, min?: number, max?: number): number {
   const num = Number(input);
   
   if (isNaN(num) || !isFinite(num)) {
-    throw new ValidationError('Invalid number format');
+    throw new ValidationError('Invalid number format', []);
   }
   
   if (min !== undefined && num < min) {
-    throw new ValidationError(`Number must be at least ${min}`);
+    throw new ValidationError(`Number must be at least ${min}`, []);
   }
   
   if (max !== undefined && num > max) {
-    throw new ValidationError(`Number must be at most ${max}`);
+    throw new ValidationError(`Number must be at most ${max}`, []);
   }
   
   return num;

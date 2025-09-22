@@ -1,6 +1,6 @@
 import { EventEmitter } from 'events';
 import { logger } from '../utils/logger';
-import { db } from '../database/connection';
+import { query as dbQuery } from '../database/connection';
 import { analyticsService } from './analyticsService';
 
 interface Alert {
@@ -65,7 +65,7 @@ class AlertingService extends EventEmitter {
 
   async createAlert(alert: Omit<Alert, 'id' | 'createdAt' | 'status'>): Promise<string> {
     try {
-      const query = `
+      const sql = `
         INSERT INTO analytics_alerts (
           alert_type, severity, title, message, metric_name, 
           threshold_value, current_value, metadata
@@ -85,7 +85,7 @@ class AlertingService extends EventEmitter {
         JSON.stringify(alert.metadata || {})
       ];
 
-      const result = await db.query(query, values);
+      const result = await dbQuery(sql, values);
       const alertId = result.rows[0].id;
 
       logger.warn('Alert created', { 
@@ -111,7 +111,7 @@ class AlertingService extends EventEmitter {
 
   async getActiveAlerts(): Promise<Alert[]> {
     try {
-      const query = `
+      const sql = `
         SELECT 
           id, alert_type, severity, title, message, metric_name,
           threshold_value, current_value, status, acknowledged_by,
@@ -121,7 +121,7 @@ class AlertingService extends EventEmitter {
         ORDER BY severity DESC, created_at DESC
       `;
 
-      const result = await db.query(query);
+      const result = await dbQuery(sql);
       return result.rows.map(this.mapRowToAlert);
     } catch (error) {
       logger.error('Failed to get active alerts', error);
@@ -131,13 +131,13 @@ class AlertingService extends EventEmitter {
 
   async acknowledgeAlert(alertId: string, acknowledgedBy: string): Promise<void> {
     try {
-      const query = `
+      const sql = `
         UPDATE analytics_alerts 
         SET status = 'acknowledged', acknowledged_by = $1, acknowledged_at = NOW()
         WHERE id = $2 AND status = 'active'
       `;
 
-      await db.query(query, [acknowledgedBy, alertId]);
+      await dbQuery(sql, [acknowledgedBy, alertId]);
       
       logger.info('Alert acknowledged', { alertId, acknowledgedBy });
       this.emit('alertAcknowledged', { alertId, acknowledgedBy });
@@ -149,13 +149,13 @@ class AlertingService extends EventEmitter {
 
   async resolveAlert(alertId: string): Promise<void> {
     try {
-      const query = `
+      const sql = `
         UPDATE analytics_alerts 
         SET status = 'resolved', resolved_at = NOW()
         WHERE id = $1 AND status IN ('active', 'acknowledged')
       `;
 
-      await db.query(query, [alertId]);
+      await dbQuery(sql, [alertId]);
       
       logger.info('Alert resolved', { alertId });
       this.emit('alertResolved', { alertId });
@@ -317,19 +317,20 @@ class AlertingService extends EventEmitter {
         await this.triggerAlert(rule, currentValue);
         rule.lastTriggered = new Date();
       }
-    } catch (error) {
-      logger.error('Failed to check alert rule', { ruleId: rule.id, error: error.message });
+    } catch (error: any) {
+      const errMsg = error instanceof Error ? error.message : String(error);
+      logger.error('Failed to check alert rule', { ruleId: rule.id, error: errMsg });
     }
   }
 
   private async getMetricValue(metricName: string, timeWindowMinutes: number): Promise<number | null> {
     try {
-      let query: string;
+      let sql: string;
       const timeWindow = `${timeWindowMinutes} minutes`;
 
       switch (metricName) {
         case 'daily_active_users':
-          query = `
+          sql = `
             SELECT COUNT(DISTINCT user_id) as value
             FROM user_events 
             WHERE timestamp >= NOW() - INTERVAL '${timeWindow}'
@@ -337,7 +338,7 @@ class AlertingService extends EventEmitter {
           break;
 
         case 'crash_rate':
-          query = `
+          sql = `
             SELECT 
               COUNT(CASE WHEN event_type = 'app_crash' THEN 1 END)::DECIMAL / 
               COUNT(DISTINCT session_id) * 100 as value
@@ -347,7 +348,7 @@ class AlertingService extends EventEmitter {
           break;
 
         case 'premium_conversion_rate':
-          query = `
+          sql = `
             SELECT 
               COUNT(CASE WHEN event_type = 'premium_converted' THEN 1 END)::DECIMAL /
               NULLIF(COUNT(CASE WHEN event_type = 'trial_started' THEN 1 END), 0) * 100 as value
@@ -357,18 +358,20 @@ class AlertingService extends EventEmitter {
           break;
 
         case 'api_error_rate':
-          // This would typically come from application logs or APM
-          query = `
+          // Compute server error rate (5xx) from api_request_metrics within the time window
+          sql = `
             SELECT 
-              COUNT(CASE WHEN event_type = 'api_error' THEN 1 END)::DECIMAL /
-              NULLIF(COUNT(CASE WHEN event_type LIKE 'api_%' THEN 1 END), 0) * 100 as value
-            FROM user_events 
+              COALESCE(
+                COUNT(CASE WHEN status_code >= 500 THEN 1 END)::DECIMAL /
+                NULLIF(COUNT(*), 0) * 100, 0
+              ) AS value
+            FROM api_request_metrics 
             WHERE timestamp >= NOW() - INTERVAL '${timeWindow}'
           `;
           break;
 
         case 'notification_delivery_rate':
-          query = `
+          sql = `
             SELECT 
               COUNT(CASE WHEN event_type = 'nudge_delivered' THEN 1 END)::DECIMAL /
               NULLIF(COUNT(CASE WHEN event_type = 'nudge_sent' THEN 1 END), 0) * 100 as value
@@ -382,10 +385,11 @@ class AlertingService extends EventEmitter {
           return null;
       }
 
-      const result = await db.query(query);
+      const result = await dbQuery(sql);
       return result.rows[0]?.value ? parseFloat(result.rows[0].value) : null;
     } catch (error) {
-      logger.error('Failed to get metric value', { metricName, error: error.message });
+      const errMsg = error instanceof Error ? error.message : String(error);
+      logger.error('Failed to get metric value', { metricName, error: errMsg });
       return null;
     }
   }
@@ -470,7 +474,7 @@ class AlertingService extends EventEmitter {
     try {
       const timeFilter = this.getTimeFilter(timeRange);
       
-      const query = `
+      const sql = `
         SELECT 
           DATE_TRUNC('day', created_at) as date,
           severity,
@@ -483,10 +487,10 @@ class AlertingService extends EventEmitter {
         ORDER BY date DESC, severity
       `;
 
-      const result = await db.query(query, [timeFilter]);
+      const result = await dbQuery(sql, [timeFilter]);
       return result.rows;
     } catch (error) {
-      logger.error('Failed to get alert metrics', error);
+      logger.error('Failed to get alert metrics', error instanceof Error ? error.message : String(error));
       throw error;
     }
   }

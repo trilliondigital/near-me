@@ -9,11 +9,16 @@ module.exports = {
   collectCoverageFrom: [
     'src/**/*.ts',
     '!src/**/*.d.ts',
-    '!src/**/*.test.ts',
-    '!src/**/*.spec.ts',
   ],
   coverageDirectory: 'coverage',
   coverageReporters: ['text', 'lcov', 'html'],
-  setupFilesAfterEnv: ['<rootDir>/src/test/setup.ts'],
-  testTimeout: 10000,
+  collectCoverage: true,
+  coverageThreshold: {
+    global: {
+      lines: 70,
+      statements: 70,
+      branches: 60,
+      functions: 65,
+    },
+  },
 };

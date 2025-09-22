@@ -9,6 +9,79 @@ class AnalyticsDashboard {
         this.init();
     }
 
+    async loadSlaSummary() {
+        try {
+            const response = await fetch('/api/monitoring/sla?window=1h');
+            const data = await response.json();
+            if (data.success) {
+                const m = data.data;
+                document.getElementById('slaSuccessRate').textContent = `${(m.success_rate || 0).toFixed(2)}%`;
+                document.getElementById('slaAvgLatency').textContent = `${m.avg_latency_ms || 0} ms`;
+                document.getElementById('slaP95Latency').textContent = `${m.p95_latency_ms || 0} ms`;
+                document.getElementById('slaServerErrors').textContent = `${m.server_errors || 0}`;
+            }
+        } catch (e) {
+            console.error('Failed to load SLA summary', e);
+        }
+    }
+
+    async loadSlaTimeseries() {
+        try {
+            const response = await fetch('/api/monitoring/sla/timeseries?minutes=60');
+            const data = await response.json();
+            if (data.success) {
+                this.renderSlaChart(data.data);
+            }
+        } catch (e) {
+            console.error('Failed to load SLA timeseries', e);
+        }
+    }
+
+    renderSlaChart(data) {
+        const ctx = document.getElementById('slaChart').getContext('2d');
+        if (this.charts.sla) {
+            this.charts.sla.destroy();
+        }
+
+        const labels = data.map(d => new Date(d.minute).toLocaleTimeString());
+        const p95 = data.map(d => d.p95_latency_ms || 0);
+        const avg = data.map(d => d.avg_latency_ms || 0);
+
+        this.charts.sla = new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels,
+                datasets: [
+                    {
+                        label: 'p95 Latency (ms)',
+                        data: p95,
+                        borderColor: '#ef4444',
+                        backgroundColor: 'rgba(239,68,68,0.1)',
+                        tension: 0.4,
+                        fill: true
+                    },
+                    {
+                        label: 'Avg Latency (ms)',
+                        data: avg,
+                        borderColor: '#10b981',
+                        backgroundColor: 'rgba(16,185,129,0.1)',
+                        tension: 0.4,
+                        fill: true
+                    }
+                ]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: { legend: { position: 'top' } },
+                scales: {
+                    y: { beginAtZero: true },
+                    x: {}
+                }
+            }
+        });
+    }
+
     async init() {
         this.setupEventListeners();
         await this.loadDashboard();
@@ -73,7 +146,9 @@ class AnalyticsDashboard {
                 this.loadPlatformChart(),
                 this.loadRetentionChart(),
                 this.loadConversionFunnel(),
-                this.loadRecentEvents()
+                this.loadRecentEvents(),
+                this.loadSlaSummary(),
+                this.loadSlaTimeseries()
             ]);
         } catch (error) {
             console.error('Failed to load dashboard:', error);

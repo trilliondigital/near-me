@@ -32,6 +32,9 @@ import privacyRoutes from './routes/privacy';
 import performanceRoutes from './routes/performance';
 import analyticsRoutes from './routes/analytics';
 import dashboardRoutes from './routes/dashboard';
+import feedbackRoutes from './routes/feedback';
+import monitoringRoutes from './routes/monitoring';
+import { requestMetrics } from './middleware/requestMetrics';
 import { BackgroundProcessor } from './services/backgroundProcessor';
 import { PushNotificationService } from './services/pushNotificationService';
 import { analyticsManager } from './services/analyticsManager';
@@ -72,6 +75,9 @@ app.use(express.urlencoded({
   parameterLimit: 100
 }));
 
+// Request metrics middleware (must be before routes)
+app.use(requestMetrics);
+
 // API routes
 app.use('/api/health', healthRoutes);
 app.use('/api/auth', authRoutes);
@@ -90,6 +96,8 @@ app.use('/api/performance', performanceRoutes);
 app.use('/api/analytics', analyticsRoutes);
 app.use('/api/dashboard', dashboardRoutes);
 app.use('/api/background', backgroundProcessorRoutes);
+app.use('/api/feedback', feedbackRoutes);
+app.use('/api/monitoring', monitoringRoutes);
 
 // Error handling middleware
 app.use(notFoundHandler);

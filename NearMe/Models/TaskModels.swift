@@ -227,6 +227,7 @@ struct TaskFilters {
     var status: TaskStatus?
     var locationType: LocationType?
     var poiCategory: POICategory?
+    var updatedSince: Date?
     var page: Int = 1
     var limit: Int = 20
     
@@ -238,6 +239,7 @@ struct TaskFilters {
         status = nil
         locationType = nil
         poiCategory = nil
+        updatedSince = nil
         page = 1
     }
 }

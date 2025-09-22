@@ -8,16 +8,6 @@ import {
 } from '../auth';
 import { AuthService } from '../../services/authService';
 import { ValidationError } from '../../models/validation';
-import { it } from 'node:test';
-import { it } from 'node:test';
-import { describe } from 'node:test';
-import { it } from 'node:test';
-import { describe } from 'node:test';
-import { it } from 'node:test';
-import { it } from 'node:test';
-import { describe } from 'node:test';
-import { beforeEach } from 'node:test';
-import { describe } from 'node:test';
 
 // Mock AuthService
 jest.mock('../../services/authService', () => ({

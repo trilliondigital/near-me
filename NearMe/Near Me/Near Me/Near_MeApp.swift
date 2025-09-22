@@ -11,6 +11,11 @@ import CoreData
 @main
 struct Near_MeApp: App {
     let persistenceController = PersistenceController.shared
+    
+    init() {
+        // Initialize crash reporting early
+        CrashReportingService.shared.setup()
+    }
 
     var body: some Scene {
         WindowGroup {

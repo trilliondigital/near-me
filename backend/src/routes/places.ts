@@ -19,7 +19,9 @@ router.use(authenticateToken);
 router.get('/', async (req: Request, res: Response) => {
   try {
     const userId = req.user!.id;
-    const places = await placeService.getUserPlaces(userId);
+    const updatedSinceParam = req.query.updated_since as string | undefined;
+    const updatedSince = updatedSinceParam ? new Date(updatedSinceParam) : undefined;
+    const places = await placeService.getUserPlaces(userId, updatedSince && !isNaN(updatedSince.getTime()) ? updatedSince : undefined);
     
     return res.json({
       success: true,

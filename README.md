@@ -54,6 +54,58 @@ Near Me/
    - Open `android/` folder in Android Studio
    - Build and run on emulator or device
 
+## Testing
+
+### Backend (Node/Express)
+
+Prereqs:
+- Postgres and Redis running locally. The simplest way is to use the project compose file:
+  - From `database/`, run: `docker-compose up -d` (Postgres on 5432, Redis on 6379)
+
+Commands (run inside `backend/`):
+- `npm install` (first time only, to install all deps)
+- `npm test` (runs Jest with coverage; 90% global threshold enforced)
+- `npm run test:watch` (watch mode for local development)
+- Coverage output: `backend/coverage/` (HTML report at `coverage/lcov-report/index.html`)
+
+Test environment:
+- `src/test/setup.ts` automatically:
+  - Connects to Postgres/Redis using `.env.test`
+  - Applies SQL schema from `database/init/`
+  - Truncates all public tables and flushes Redis between tests
+
+### iOS (Xcode / Swift)
+
+You can run tests in Xcode or via CLI:
+- Xcode: Product > Test
+- CLI example:
+  ```bash
+  xcodebuild -project NearMe.xcodeproj \
+    -scheme NearMe \
+    -destination 'platform=iOS Simulator,name=iPhone 15,OS=17.0' \
+    -configuration Debug \
+    test
+  ```
+
+### Android (Gradle / Kotlin)
+
+Run from the `android/` directory:
+- Unit tests: `./gradlew testDebugUnitTest`
+- Lint: `./gradlew lint`
+- Build Debug APK: `./gradlew assembleDebug`
+- Instrumented tests (if configured): `./gradlew connectedDebugAndroidTest`
+
+### Continuous Integration
+
+GitHub Actions workflows are provided in `.github/workflows/`:
+- Backend: spins up Postgres (PostGIS-enabled) and Redis services, runs lint, build, and Jest tests with coverage upload
+- iOS: builds and runs tests on macOS runners using Xcode 15
+- Android: runs lint, builds Debug, and runs unit tests
+
+Notes:
+- Backend CI uses the PostGIS image to support `CREATE EXTENSION postgis` used by schema SQL
+- Ensure any new tests are deterministic (DB is truncated and Redis flushed per test)
+
 ## Features
 
 - **Tiered Geofencing**: Multiple notification zones (5mi, 3mi, 1mi, arrival, post-arrival)
