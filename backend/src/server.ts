@@ -5,6 +5,16 @@ import morgan from 'morgan';
 import dotenv from 'dotenv';
 import { errorHandler } from './middleware/errorHandler';
 import { notFoundHandler } from './middleware/notFoundHandler';
+import { 
+  securityHeaders, 
+  corsOptions, 
+  requestId, 
+  securityLogger, 
+  validateContentType,
+  validateRequestBody,
+  apiRateLimit,
+  speedLimiter
+} from './middleware/security';
 import { authRoutes } from './routes/auth';
 import { taskRoutes } from './routes/tasks';
 import { placeRoutes } from './routes/places';
@@ -30,18 +40,33 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 
 // Security middleware
-app.use(helmet());
-app.use(cors({
-  origin: process.env.ALLOWED_ORIGINS?.split(',') || ['http://localhost:3000'],
-  credentials: true
-}));
+app.use(securityHeaders);
+app.use(cors(corsOptions));
+app.use(requestId);
+app.use(securityLogger);
+
+// Rate limiting and speed limiting
+app.use(apiRateLimit);
+app.use(speedLimiter);
+
+// Request validation
+app.use(validateRequestBody());
+app.use(validateContentType());
 
 // Logging middleware
 app.use(morgan('combined'));
 
-// Body parsing middleware
-app.use(express.json({ limit: '10mb' }));
-app.use(express.urlencoded({ extended: true }));
+// Body parsing middleware with security limits
+app.use(express.json({ 
+  limit: '1mb',
+  strict: true,
+  type: 'application/json'
+}));
+app.use(express.urlencoded({ 
+  extended: true, 
+  limit: '1mb',
+  parameterLimit: 100
+}));
 
 // API routes
 app.use('/api/health', healthRoutes);

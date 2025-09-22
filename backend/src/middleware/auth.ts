@@ -1,5 +1,6 @@
 import { Request, Response, NextFunction } from 'express';
 import { AuthService } from '../services/authService';
+import { TokenService } from '../services/tokenService';
 import { ValidationError } from '../models/validation';
 
 /**
@@ -20,19 +21,20 @@ export async function authenticateToken(req: Request, res: Response, next: NextF
       return;
     }
 
-    const parts = authHeader.split(' ');
-    if (parts.length !== 2 || parts[0] !== 'Bearer') {
+    const token = TokenService.extractBearerToken(authHeader);
+    
+    // Check if token is blacklisted
+    if (TokenService.isTokenBlacklisted(token)) {
       res.status(401).json({
         error: {
-          code: 'INVALID_TOKEN_FORMAT',
-          message: 'Authorization header must be in format: Bearer <token>',
+          code: 'TOKEN_BLACKLISTED',
+          message: 'Token has been revoked',
           timestamp: new Date().toISOString()
         }
       });
       return;
     }
 
-    const token = parts[1];
     const { user, sessionId } = await AuthService.validateSession(token);
 
     // Attach user and session info to request
