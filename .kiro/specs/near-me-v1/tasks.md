@@ -68,7 +68,7 @@
   - Write tests using location simulation and mock CLLocationManager
   - _Requirements: 4.1, 4.2, 4.3, 4.4, 8.3, 8.4_
 
-- [-] 8. Implement Android location services and geofencing
+- [x] 8. Implement Android location services and geofencing
   - Set up FusedLocationProvider with balanced power accuracy
   - Implement GeofencingClient with PendingIntent receivers
   - Create location permission handling and background processing setup
@@ -78,7 +78,7 @@
   - Write tests using location mocking and instrumentation tests
   - _Requirements: 4.1, 4.2, 4.3, 4.4, 8.3, 8.4_
 
-- [ ] 9. Build cross-platform geofence event processing
+- [-] 9. Build cross-platform geofence event processing
   - Create geofence event API endpoints for client-server synchronization
   - Implement on-device geofence evaluation logic for privacy
   - Build event queuing system for offline scenarios
