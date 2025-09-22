@@ -27,8 +27,9 @@
         android:theme="@style/Theme.NearMe"
         tools:targetApi="31">
         
+        <!-- Onboarding Activity -->
         <activity
-            android:name=".MainActivity"
+            android:name=".ui.onboarding.OnboardingActivity"
             android:exported="true"
             android:label="@string/app_name"
             android:theme="@style/Theme.NearMe">
@@ -37,6 +38,13 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+        
+        <!-- Main Activity -->
+        <activity
+            android:name=".MainActivity"
+            android:exported="false"
+            android:label="@string/app_name"
+            android:theme="@style/Theme.NearMe" />
         
         <!-- Geofence broadcast receiver -->
         <receiver

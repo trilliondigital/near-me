@@ -30,11 +30,8 @@ struct TaskListView: View {
                     LoadingView()
                 } else if taskService.tasks.isEmpty {
                     EmptyStateView(
-                        title: filters.hasActiveFilters ? "No tasks match your filters" : "No tasks yet",
-                        subtitle: filters.hasActiveFilters ? "Try adjusting your filters or create a new task" : "Create your first location-based reminder",
-                        icon: "checkmark.circle",
-                        actionTitle: filters.hasActiveFilters ? "Clear Filters" : "Create Task",
-                        action: filters.hasActiveFilters ? clearFilters : { showingCreateTask = true }
+                        config: emptyStateConfig,
+                        onAction: nil
                     )
                 } else {
                     TaskListContent(
@@ -81,6 +78,50 @@ struct TaskListView: View {
     private func clearFilters() {
         filters.clear()
         taskService.fetchTasks(filters: filters)
+    }
+    
+    private var emptyStateConfig: EmptyStateConfig {
+        if !taskService.searchText.isEmpty {
+            return .noSearchResults(
+                searchTerm: taskService.searchText,
+                onClearSearch: {
+                    taskService.searchText = ""
+                    taskService.fetchTasks(filters: filters)
+                },
+                onCreateTask: {
+                    showingCreateTask = true
+                }
+            )
+        } else if filters.hasActiveFilters {
+            return .noFilteredResults(
+                filterName: filters.activeFilterName,
+                onClearFilters: clearFilters,
+                onCreateTask: {
+                    showingCreateTask = true
+                }
+            )
+        } else if taskService.isFirstTimeUser {
+            return .noTasksFirstTime(
+                onCreateTask: {
+                    showingCreateTask = true
+                },
+                onViewExamples: {
+                    // Show seed task examples
+                },
+                onLearnMore: {
+                    // Show education flow
+                }
+            )
+        } else {
+            return .noTasksReturning(
+                onCreateTask: {
+                    showingCreateTask = true
+                },
+                onViewCompleted: {
+                    // Show completed tasks
+                }
+            )
+        }
     }
 }
 

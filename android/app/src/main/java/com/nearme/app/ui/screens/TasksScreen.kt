@@ -188,20 +188,13 @@ fun TasksScreen() {
                 }
             }
         } else if (filteredTasks.isEmpty()) {
-            Box(
-                modifier = Modifier.fillMaxSize(),
-                contentAlignment = Alignment.Center
-            ) {
-                EmptyStateCard(
-                    icon = if (searchText.isEmpty()) "list" else "search",
-                    title = if (searchText.isEmpty()) "No Tasks Yet" else "No Results",
-                    message = if (searchText.isEmpty()) 
-                        "Create your first task to get started with location-based reminders." 
-                    else "No tasks match your search criteria.",
-                    actionTitle = if (searchText.isEmpty()) "Create Task" else null,
-                    onActionClick = if (searchText.isEmpty()) { /* Create task */ } else null
+            EnhancedEmptyStateView(
+                config = getEmptyStateConfig(
+                    searchText = searchText,
+                    selectedFilter = selectedFilter,
+                    isFirstTimeUser = tasks.isEmpty() && searchText.isEmpty() && selectedFilter == TaskFilter.All
                 )
-            }
+            )
         } else {
             LazyColumn(
                 modifier = Modifier.fillMaxSize(),
@@ -261,6 +254,34 @@ data class Task(
 
 enum class TaskStatus {
     Active, Completed, Muted
+}
+
+fun getEmptyStateConfig(
+    searchText: String,
+    selectedFilter: TaskFilter,
+    isFirstTimeUser: Boolean
+): EmptyStateConfig {
+    return when {
+        searchText.isNotEmpty() -> EmptyStates.noSearchResults(
+            searchTerm = searchText,
+            onClearSearch = { /* Clear search */ },
+            onCreateTask = { /* Create task */ }
+        )
+        selectedFilter != TaskFilter.All -> EmptyStates.noFilteredResults(
+            filterName = selectedFilter.title,
+            onClearFilters = { /* Clear filters */ },
+            onCreateTask = { /* Create task */ }
+        )
+        isFirstTimeUser -> EmptyStates.noTasksFirstTime(
+            onCreateTask = { /* Create task */ },
+            onViewExamples = { /* Show examples */ },
+            onLearnMore = { /* Show education */ }
+        )
+        else -> EmptyStates.noTasksReturning(
+            onCreateTask = { /* Create task */ },
+            onViewCompleted = { /* Show completed */ }
+        )
+    }
 }
 
 @Preview(showBackground = true)
