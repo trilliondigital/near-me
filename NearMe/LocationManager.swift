@@ -102,6 +102,39 @@ class LocationManager: NSObject, ObservableObject {
         locationManager.desiredAccuracy = kCLLocationAccuracyHundredMeters
         locationManager.distanceFilter = 50 // 50 meters
         authorizationStatus = locationManager.authorizationStatus
+        
+        // Integrate with battery optimization service
+        setupBatteryOptimizationIntegration()
+    }
+    
+    private func setupBatteryOptimizationIntegration() {
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(batteryOptimizationChanged(_:)),
+            name: .batteryOptimizationChanged,
+            object: nil
+        )
+        
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(backgroundModeOptimizationRequested(_:)),
+            name: .backgroundModeOptimizationRequested,
+            object: nil
+        )
+        
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(geofenceOptimizationRequested(_:)),
+            name: .geofenceOptimizationRequested,
+            object: nil
+        )
+        
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(memoryCleanupRequested),
+            name: .memoryCleanupRequested,
+            object: nil
+        )
     }
     
     private func setupBackgroundObservers() {
@@ -211,15 +244,28 @@ class LocationManager: NSObject, ObservableObject {
     private func optimizeForBackground() {
         guard batteryOptimizationEnabled else { return }
         
-        // Reduce location accuracy for battery optimization
-        locationManager.desiredAccuracy = kCLLocationAccuracyKilometer
-        locationManager.distanceFilter = 500 // 500 meters
+        let optimizationLevel = BatteryOptimizationService.shared.currentOptimizationLevel
+        applyOptimizationSettings(optimizationLevel, isBackground: true)
     }
     
     private func optimizeForForeground() {
-        // Restore normal accuracy when in foreground
-        locationManager.desiredAccuracy = kCLLocationAccuracyHundredMeters
-        locationManager.distanceFilter = 50 // 50 meters
+        let optimizationLevel = BatteryOptimizationService.shared.currentOptimizationLevel
+        applyOptimizationSettings(optimizationLevel, isBackground: false)
+    }
+    
+    private func applyOptimizationSettings(_ level: BatteryOptimizationService.OptimizationLevel, isBackground: Bool) {
+        let accuracy = isBackground ? 
+            min(level.locationAccuracy, kCLLocationAccuracyKilometer) : 
+            level.locationAccuracy
+        
+        let distanceFilter = isBackground ? 
+            max(level.updateInterval * 10, 500) : // Larger distance filter in background
+            level.updateInterval * 5
+        
+        locationManager.desiredAccuracy = accuracy
+        locationManager.distanceFilter = distanceFilter
+        
+        print("Applied location settings - Accuracy: \(accuracy), Distance Filter: \(distanceFilter)m, Background: \(isBackground)")
     }
     
     // MARK: - Geofence Management
@@ -399,6 +445,89 @@ class LocationManager: NSObject, ObservableObject {
         let timeSinceLastUpdate = Date().timeIntervalSince(lastLocationUpdate)
         return timeSinceLastUpdate >= locationUpdateInterval
     }
+    
+    // MARK: - Battery Optimization Handlers
+    @objc private func batteryOptimizationChanged(_ notification: Notification) {
+        guard let level = notification.object as? BatteryOptimizationService.OptimizationLevel else { return }
+        
+        applyOptimizationSettings(level, isBackground: isInBackground)
+        
+        // Adjust geofence count based on optimization level
+        let maxGeofences = level.maxActiveGeofences
+        if activeGeofences.count > maxGeofences {
+            try? optimizeActiveGeofences()
+        }
+    }
+    
+    @objc private func backgroundModeOptimizationRequested(_ notification: Notification) {
+        guard let isBackground = notification.object as? Bool else { return }
+        
+        if isBackground {
+            optimizeForBackground()
+        } else {
+            optimizeForForeground()
+        }
+    }
+    
+    @objc private func geofenceOptimizationRequested(_ notification: Notification) {
+        guard let userInfo = notification.userInfo,
+              let maxGeofences = userInfo["maxGeofences"] as? Int,
+              let prioritizeNearby = userInfo["prioritizeNearby"] as? Bool else { return }
+        
+        optimizeGeofencesForBattery(maxCount: maxGeofences, prioritizeNearby: prioritizeNearby)
+    }
+    
+    @objc private func memoryCleanupRequested() {
+        // Clear location history and reduce memory footprint
+        currentLocation = nil
+        
+        // Remove old geofence data
+        let cutoffDate = Date().addingTimeInterval(-3600) // 1 hour ago
+        let oldGeofences = activeGeofences.filter { $0.value.createdAt < cutoffDate }
+        
+        for (identifier, _) in oldGeofences {
+            unregisterGeofence(identifier: identifier)
+        }
+        
+        print("Memory cleanup completed - removed \(oldGeofences.count) old geofences")
+    }
+    
+    private func optimizeGeofencesForBattery(maxCount: Int, prioritizeNearby: Bool) {
+        guard activeGeofences.count > maxCount else { return }
+        
+        var sortedGeofences = Array(activeGeofences.values)
+        
+        if prioritizeNearby, let currentLocation = currentLocation {
+            // Sort by distance from current location
+            sortedGeofences.sort { first, second in
+                let firstDistance = currentLocation.distance(from: CLLocation(
+                    latitude: first.center.latitude,
+                    longitude: first.center.longitude
+                ))
+                let secondDistance = currentLocation.distance(from: CLLocation(
+                    latitude: second.center.latitude,
+                    longitude: second.center.longitude
+                ))
+                return firstDistance < secondDistance
+            }
+        } else {
+            // Sort by priority and creation date
+            sortedGeofences.sort { first, second in
+                if first.priority != second.priority {
+                    return first.priority > second.priority
+                }
+                return first.createdAt > second.createdAt
+            }
+        }
+        
+        // Remove excess geofences
+        let toRemove = sortedGeofences.suffix(sortedGeofences.count - maxCount)
+        for geofence in toRemove {
+            unregisterGeofence(identifier: geofence.id)
+        }
+        
+        print("Battery optimization: removed \(toRemove.count) geofences, keeping \(maxCount)")
+    }
 }
 
 // MARK: - CLLocationManagerDelegate
@@ -412,6 +541,13 @@ extension LocationManager: CLLocationManagerDelegate {
         currentLocation = location
         lastLocationUpdate = Date()
         locationError = nil
+        
+        // Record performance metrics
+        let responseTime = Date().timeIntervalSince(lastLocationUpdate)
+        PerformanceMonitoringService.shared.recordLocationUpdate(
+            accuracy: location.horizontalAccuracy,
+            responseTime: responseTime
+        )
         
         // Post location update notification
         NotificationCenter.default.post(
