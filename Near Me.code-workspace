@@ -1,0 +1,43 @@
+{
+	"folders": [
+		{
+			"path": "."
+		}
+	],
+	"settings": {
+		"kiroAgent.configureMCP": "Enabled",
+		"kiroAgent.trustedCommands": [
+			"npm *",
+			"npx *",
+			"brew *",
+			"cd *",
+			"swift *",
+			"python *",
+			"pip *",
+			"git *",
+			"npm test *",
+			"npm test -- --testPathPattern= *",
+			"xcodebuild *",
+			"mkdir *",
+			"./gradlew *",
+			"java *",
+			"npm test -- --testPathPattern=\"geofenceEventProcessor|eventQueueService|geofenceEvents\" --run",
+			"npm test -- --testPathPattern=\"geofenceEventProcessor|eventQueueService|geofenceEvents\"",
+			"npm test -- --testPathPattern=\"notificationService|notificationScheduler|notificationTemplates\" --run",
+			"npm test -- --testPathPattern=\"notificationService|notificationScheduler|notificationTemplates\"",
+			"node *",
+			"docker-compose *"
+		],
+		"files.autoSave": "afterDelay",
+		"editor.aiStats.enabled": true,
+		"task.quickOpen.showAll": false,
+		"chat.agentSessionsViewLocation": "disabled",
+		"chat.editing.autoAcceptDelay": 20,
+		"chat.math.enabled": true,
+		"chat.mcp.assisted.nuget.enabled": true,
+		"chat.renderRelatedFiles": true,
+		"chat.todoListTool.enabled": true,
+		"inlineChat.enableV2": true,
+		"inlineChat.notebookAgent": true
+	}
+}
