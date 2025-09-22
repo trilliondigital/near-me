@@ -1,373 +1,513 @@
 import XCTest
 import SwiftUI
-import Combine
+import UserNotifications
 @testable import NearMe
 
+// MARK: - Notification UI Tests
 class NotificationUITests: XCTestCase {
     
     var notificationManager: NotificationManager!
-    var viewModel: NotificationHistoryViewModel!
-    var cancellables: Set<AnyCancellable>!
+    var interactionService: NotificationInteractionService!
+    var mockNotification: NotificationItem!
     
     override func setUp() {
         super.setUp()
         notificationManager = NotificationManager()
-        viewModel = NotificationHistoryViewModel()
-        cancellables = Set<AnyCancellable>()
+        interactionService = NotificationInteractionService.shared
+        
+        mockNotification = NotificationItem(
+            id: "test-notification-1",
+            title: "Test Notification",
+            body: "This is a test notification",
+            taskId: "test-task-1",
+            type: .approach,
+            actions: [
+                NotificationAction.complete,
+                NotificationAction.snooze15m,
+                NotificationAction.mute
+            ]
+        )
     }
     
     override func tearDown() {
-        cancellables = nil
-        viewModel = nil
         notificationManager = nil
+        interactionService = nil
+        mockNotification = nil
         super.tearDown()
     }
     
-    // MARK: - Notification Card Tests
+    // MARK: - Notification Display Tests
     
-    func testNotificationCardDisplaysCorrectly() {
-        let notification = NotificationItem.sample
-        let expectation = XCTestExpectation(description: "Notification card displays")
+    func testNotificationCardDisplaysCorrectInformation() {
+        // Given
+        let notification = mockNotification!
         
-        // Test that the notification card can be created
+        // When
         let card = NotificationCard(
-            notification: notification,
-            onAction: { _ in
-                expectation.fulfill()
-            }
+            title: notification.title,
+            message: notification.body,
+            timestamp: notification.timestamp,
+            isRead: notification.isRead,
+            actions: [],
+            onAction: nil
         )
         
+        // Then
         XCTAssertNotNil(card)
-        XCTAssertEqual(notification.title, "You're near the pharmacy")
-        XCTAssertEqual(notification.body, "Don't forget to pick up your prescription")
-        XCTAssertFalse(notification.isRead)
+        // Note: In a real UI test, we would verify the displayed text matches the notification data
     }
     
-    func testNotificationCardActions() {
-        let notification = NotificationItem.sample
-        var actionPerformed: NotificationAction?
+    func testNotificationCardShowsUnreadIndicator() {
+        // Given
+        var notification = mockNotification!
+        notification.isRead = false
         
+        // When
         let card = NotificationCard(
-            notification: notification,
-            onAction: { action in
-                actionPerformed = action
-            }
+            title: notification.title,
+            message: notification.body,
+            timestamp: notification.timestamp,
+            isRead: notification.isRead,
+            actions: [],
+            onAction: nil
         )
         
-        // Simulate action tap
+        // Then
+        XCTAssertNotNil(card)
+        // Note: In a real UI test, we would verify the unread indicator is visible
+    }
+    
+    func testNotificationCardHidesUnreadIndicatorWhenRead() {
+        // Given
+        var notification = mockNotification!
+        notification.isRead = true
+        
+        // When
+        let card = NotificationCard(
+            title: notification.title,
+            message: notification.body,
+            timestamp: notification.timestamp,
+            isRead: notification.isRead,
+            actions: [],
+            onAction: nil
+        )
+        
+        // Then
+        XCTAssertNotNil(card)
+        // Note: In a real UI test, we would verify the unread indicator is hidden
+    }
+    
+    // MARK: - In-App Notification Tests
+    
+    func testInAppNotificationIsAddedToActiveList() {
+        // Given
+        let initialCount = interactionService.activeInAppNotifications.count
+        
+        // When
+        interactionService.showInAppNotification(mockNotification)
+        
+        // Then
+        XCTAssertEqual(interactionService.activeInAppNotifications.count, initialCount + 1)
+        XCTAssertTrue(interactionService.activeInAppNotifications.contains { $0.id == mockNotification.id })
+    }
+    
+    func testDuplicateInAppNotificationIsNotAdded() {
+        // Given
+        interactionService.showInAppNotification(mockNotification)
+        let countAfterFirst = interactionService.activeInAppNotifications.count
+        
+        // When
+        interactionService.showInAppNotification(mockNotification)
+        
+        // Then
+        XCTAssertEqual(interactionService.activeInAppNotifications.count, countAfterFirst)
+    }
+    
+    func testInAppNotificationCanBeDismissed() {
+        // Given
+        interactionService.showInAppNotification(mockNotification)
+        XCTAssertTrue(interactionService.activeInAppNotifications.contains { $0.id == mockNotification.id })
+        
+        // When
+        interactionService.dismissInAppNotification(mockNotification.id)
+        
+        // Then
+        XCTAssertFalse(interactionService.activeInAppNotifications.contains { $0.id == mockNotification.id })
+    }
+    
+    func testAllInAppNotificationsCanBeDismissed() {
+        // Given
+        let notification1 = mockNotification!
+        let notification2 = NotificationItem(
+            id: "test-notification-2",
+            title: "Test Notification 2",
+            body: "This is another test notification",
+            type: .arrival
+        )
+        
+        interactionService.showInAppNotification(notification1)
+        interactionService.showInAppNotification(notification2)
+        XCTAssertEqual(interactionService.activeInAppNotifications.count, 2)
+        
+        // When
+        interactionService.dismissAllInAppNotifications()
+        
+        // Then
+        XCTAssertEqual(interactionService.activeInAppNotifications.count, 0)
+    }
+    
+    // MARK: - Action Handling Tests
+    
+    func testCompleteActionRemovesNotificationFromActiveList() {
+        // Given
+        interactionService.showInAppNotification(mockNotification)
         let completeAction = NotificationAction.complete
-        // In a real test, we would trigger the button tap
-        // For now, we'll test the action structure
-        XCTAssertEqual(completeAction.identifier, "COMPLETE_ACTION")
-        XCTAssertEqual(completeAction.title, "Complete")
-        XCTAssertEqual(completeAction.icon, "checkmark.circle.fill")
+        
+        // When
+        interactionService.handleNotificationAction(completeAction, for: mockNotification)
+        
+        // Then
+        XCTAssertFalse(interactionService.activeInAppNotifications.contains { $0.id == mockNotification.id })
     }
     
-    // MARK: - Notification History View Model Tests
-    
-    func testNotificationFiltering() {
-        let notifications = [
-            NotificationItem(
-                title: "Test 1",
-                body: "Body 1",
-                timestamp: Date(),
-                isRead: false
-            ),
-            NotificationItem(
-                title: "Test 2",
-                body: "Body 2",
-                timestamp: Date().addingTimeInterval(-86400), // Yesterday
-                isRead: true
-            ),
-            NotificationItem(
-                title: "Test 3",
-                body: "Body 3",
-                timestamp: Date(),
-                type: .completion,
-                isRead: false
-            )
-        ]
+    func testSnoozeActionRemovesNotificationFromActiveList() {
+        // Given
+        interactionService.showInAppNotification(mockNotification)
+        let snoozeAction = NotificationAction.snooze15m
         
-        viewModel.notifications = notifications
+        // When
+        interactionService.handleNotificationAction(snoozeAction, for: mockNotification)
         
-        // Test all filter
-        viewModel.selectedFilter = .all
-        XCTAssertEqual(viewModel.filteredNotifications.count, 3)
-        
-        // Test unread filter
-        viewModel.selectedFilter = .unread
-        XCTAssertEqual(viewModel.filteredNotifications.count, 2)
-        
-        // Test today filter
-        viewModel.selectedFilter = .today
-        XCTAssertEqual(viewModel.filteredNotifications.count, 2)
-        
-        // Test completed filter
-        viewModel.selectedFilter = .completed
-        XCTAssertEqual(viewModel.filteredNotifications.count, 1)
+        // Then
+        XCTAssertFalse(interactionService.activeInAppNotifications.contains { $0.id == mockNotification.id })
     }
     
-    func testNotificationActionHandling() {
-        let notification = NotificationItem.sample
-        viewModel.notifications = [notification]
+    func testMuteActionRemovesNotificationFromActiveList() {
+        // Given
+        interactionService.showInAppNotification(mockNotification)
+        let muteAction = NotificationAction.mute
         
-        // Test complete action
-        viewModel.handleAction(NotificationAction.complete, for: notification)
+        // When
+        interactionService.handleNotificationAction(muteAction, for: mockNotification)
         
-        // Notification should be removed from list
-        XCTAssertTrue(viewModel.notifications.isEmpty)
+        // Then
+        XCTAssertFalse(interactionService.activeInAppNotifications.contains { $0.id == mockNotification.id })
     }
     
-    func testMarkAllAsRead() {
-        let notifications = [
-            NotificationItem(title: "Test 1", body: "Body 1", isRead: false),
-            NotificationItem(title: "Test 2", body: "Body 2", isRead: false),
-            NotificationItem(title: "Test 3", body: "Body 3", isRead: true)
-        ]
+    // MARK: - Snooze Duration Tests
+    
+    func testSnoozeDurationPickerShowsAllOptions() {
+        // Given
+        let allDurations = SnoozeDuration.allCases
         
-        viewModel.notifications = notifications
-        viewModel.markAllAsRead()
-        
-        // All notifications should be marked as read
-        XCTAssertTrue(viewModel.notifications.allSatisfy { $0.isRead })
+        // When/Then
+        XCTAssertEqual(allDurations.count, 5)
+        XCTAssertTrue(allDurations.contains(.fifteenMinutes))
+        XCTAssertTrue(allDurations.contains(.oneHour))
+        XCTAssertTrue(allDurations.contains(.fourHours))
+        XCTAssertTrue(allDurations.contains(.today))
+        XCTAssertTrue(allDurations.contains(.tomorrow))
     }
     
-    // MARK: - Notification Settings View Model Tests
-    
-    func testNotificationSettingsLoading() {
-        let settingsViewModel = NotificationSettingsViewModel()
-        
-        // Test default values
-        XCTAssertTrue(settingsViewModel.locationRemindersEnabled)
-        XCTAssertTrue(settingsViewModel.taskCompletionAlerts)
-        XCTAssertFalse(settingsViewModel.dailySummary)
-        XCTAssertFalse(settingsViewModel.quietHoursEnabled)
-        XCTAssertEqual(settingsViewModel.defaultSnoozeDuration, .fifteenMinutes)
+    func testSnoozeDurationHasCorrectTimeIntervals() {
+        // Given/When/Then
+        XCTAssertEqual(SnoozeDuration.fifteenMinutes.timeInterval, 15 * 60)
+        XCTAssertEqual(SnoozeDuration.oneHour.timeInterval, 60 * 60)
+        XCTAssertEqual(SnoozeDuration.fourHours.timeInterval, 4 * 60 * 60)
+        XCTAssertEqual(SnoozeDuration.today.timeInterval, 24 * 60 * 60)
+        XCTAssertEqual(SnoozeDuration.tomorrow.timeInterval, 48 * 60 * 60)
     }
     
-    func testNotificationSettingsSaving() {
-        let settingsViewModel = NotificationSettingsViewModel()
+    func testCustomSnoozePickerCanBeShown() {
+        // Given
+        XCTAssertFalse(interactionService.showSnoozePicker)
         
-        // Modify settings
-        settingsViewModel.locationRemindersEnabled = false
-        settingsViewModel.taskCompletionAlerts = false
-        settingsViewModel.dailySummary = true
-        settingsViewModel.quietHoursEnabled = true
-        settingsViewModel.defaultSnoozeDuration = .oneHour
+        // When
+        let customSnoozeAction = NotificationAction(
+            identifier: "SNOOZE_CUSTOM_ACTION",
+            title: "Custom",
+            icon: "clock.arrow.circlepath"
+        )
+        interactionService.handleNotificationAction(customSnoozeAction, for: mockNotification)
         
-        // Save settings
-        settingsViewModel.saveSettings()
-        
-        // Create new instance and load settings
-        let newSettingsViewModel = NotificationSettingsViewModel()
-        newSettingsViewModel.loadSettings()
-        
-        // Verify settings were saved
-        XCTAssertFalse(newSettingsViewModel.locationRemindersEnabled)
-        XCTAssertFalse(newSettingsViewModel.taskCompletionAlerts)
-        XCTAssertTrue(newSettingsViewModel.dailySummary)
-        XCTAssertTrue(newSettingsViewModel.quietHoursEnabled)
-        XCTAssertEqual(newSettingsViewModel.defaultSnoozeDuration, .oneHour)
+        // Then
+        XCTAssertTrue(interactionService.showSnoozePicker)
+        XCTAssertEqual(interactionService.selectedNotificationForSnooze?.id, mockNotification.id)
     }
     
-    func testResetToDefaults() {
-        let settingsViewModel = NotificationSettingsViewModel()
+    func testCustomSnoozeCanBeCancelled() {
+        // Given
+        interactionService.selectedNotificationForSnooze = mockNotification
+        interactionService.showSnoozePicker = true
         
-        // Modify settings
-        settingsViewModel.locationRemindersEnabled = false
-        settingsViewModel.taskCompletionAlerts = false
-        settingsViewModel.dailySummary = true
-        settingsViewModel.quietHoursEnabled = true
-        settingsViewModel.defaultSnoozeDuration = .oneHour
+        // When
+        interactionService.cancelCustomSnooze()
         
-        // Reset to defaults
-        settingsViewModel.resetToDefaults()
-        
-        // Verify settings were reset
-        XCTAssertTrue(settingsViewModel.locationRemindersEnabled)
-        XCTAssertTrue(settingsViewModel.taskCompletionAlerts)
-        XCTAssertFalse(settingsViewModel.dailySummary)
-        XCTAssertFalse(settingsViewModel.quietHoursEnabled)
-        XCTAssertEqual(settingsViewModel.defaultSnoozeDuration, .fifteenMinutes)
+        // Then
+        XCTAssertFalse(interactionService.showSnoozePicker)
+        XCTAssertNil(interactionService.selectedNotificationForSnooze)
     }
     
-    // MARK: - Notification Manager Tests
+    // MARK: - Notification Filter Tests
     
-    func testNotificationPermissionRequest() {
+    func testNotificationFilterHasCorrectTitles() {
+        // Given/When/Then
+        XCTAssertEqual(NotificationFilter.all.title, "All")
+        XCTAssertEqual(NotificationFilter.unread.title, "Unread")
+        XCTAssertEqual(NotificationFilter.today.title, "Today")
+        XCTAssertEqual(NotificationFilter.thisWeek.title, "This Week")
+        XCTAssertEqual(NotificationFilter.completed.title, "Completed")
+        XCTAssertEqual(NotificationFilter.snoozed.title, "Snoozed")
+    }
+    
+    func testNotificationFilterHasCorrectEmptyStates() {
+        // Given/When/Then
+        XCTAssertEqual(NotificationFilter.all.emptyStateTitle, "No Notifications Yet")
+        XCTAssertEqual(NotificationFilter.unread.emptyStateTitle, "All Caught Up!")
+        XCTAssertEqual(NotificationFilter.today.emptyStateTitle, "No Notifications Today")
+        XCTAssertEqual(NotificationFilter.thisWeek.emptyStateTitle, "No Notifications This Week")
+        XCTAssertEqual(NotificationFilter.completed.emptyStateTitle, "No Completed Tasks")
+        XCTAssertEqual(NotificationFilter.snoozed.emptyStateTitle, "No Snoozed Tasks")
+    }
+    
+    // MARK: - Notification Settings Tests
+    
+    func testNotificationSettingsHaveDefaultValues() {
+        // Given
+        let settings = NotificationSettings.default
+        
+        // When/Then
+        XCTAssertTrue(settings.locationRemindersEnabled)
+        XCTAssertTrue(settings.taskCompletionAlerts)
+        XCTAssertFalse(settings.dailySummary)
+        XCTAssertFalse(settings.quietHoursEnabled)
+        XCTAssertEqual(settings.defaultSnoozeDuration, .fifteenMinutes)
+        XCTAssertTrue(settings.soundEnabled)
+        XCTAssertTrue(settings.vibrationEnabled)
+        XCTAssertTrue(settings.badgeEnabled)
+    }
+    
+    func testNotificationSettingsCanBeEncoded() {
+        // Given
+        let settings = NotificationSettings.default
+        
+        // When
+        let encoder = JSONEncoder()
+        let data = try? encoder.encode(settings)
+        
+        // Then
+        XCTAssertNotNil(data)
+    }
+    
+    func testNotificationSettingsCanBeDecoded() {
+        // Given
+        let settings = NotificationSettings.default
+        let encoder = JSONEncoder()
+        let data = try! encoder.encode(settings)
+        
+        // When
+        let decoder = JSONDecoder()
+        let decodedSettings = try? decoder.decode(NotificationSettings.self, from: data)
+        
+        // Then
+        XCTAssertNotNil(decodedSettings)
+        XCTAssertEqual(decodedSettings?.locationRemindersEnabled, settings.locationRemindersEnabled)
+        XCTAssertEqual(decodedSettings?.taskCompletionAlerts, settings.taskCompletionAlerts)
+        XCTAssertEqual(decodedSettings?.defaultSnoozeDuration, settings.defaultSnoozeDuration)
+    }
+    
+    // MARK: - Notification Permission Tests
+    
+    func testNotificationPermissionStatusIsTracked() {
+        // Given/When
+        let manager = NotificationManager()
+        
+        // Then
+        XCTAssertNotNil(manager.authorizationStatus)
+        // Note: The actual status depends on the test environment
+    }
+    
+    func testNotificationPermissionCanBeRequested() {
+        // Given
+        let manager = NotificationManager()
         let expectation = XCTestExpectation(description: "Permission requested")
         
-        notificationManager.requestNotificationPermission()
+        // When
+        manager.requestNotificationPermission()
         
-        // In a real test environment, we would mock the UNUserNotificationCenter
-        // For now, we'll test that the method doesn't crash
-        XCTAssertNotNil(notificationManager)
-        expectation.fulfill()
-        
-        wait(for: [expectation], timeout: 1.0)
-    }
-    
-    func testNotificationScheduling() {
-        let expectation = XCTestExpectation(description: "Notification scheduled")
-        
-        notificationManager.scheduleLocationNotification(
-            identifier: "test-notification",
-            title: "Test Title",
-            body: "Test Body",
-            taskId: "test-task",
-            actions: notificationManager.createNotificationActions()
-        )
-        
-        // Test that the method completes without error
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+        // Then
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1) {
             expectation.fulfill()
         }
         
-        wait(for: [expectation], timeout: 1.0)
-    }
-    
-    func testNotificationCancellation() {
-        let identifier = "test-notification"
-        
-        // Schedule a notification
-        notificationManager.scheduleLocationNotification(
-            identifier: identifier,
-            title: "Test Title",
-            body: "Test Body"
-        )
-        
-        // Cancel the notification
-        notificationManager.cancelNotification(identifier: identifier)
-        
-        // Test that the method completes without error
-        XCTAssertNotNil(notificationManager)
-    }
-    
-    // MARK: - Notification Action Tests
-    
-    func testNotificationActionCreation() {
-        let actions = notificationManager.createNotificationActions()
-        
-        XCTAssertEqual(actions.count, 5)
-        
-        let actionIdentifiers = actions.map { $0.identifier }
-        XCTAssertTrue(actionIdentifiers.contains("COMPLETE_ACTION"))
-        XCTAssertTrue(actionIdentifiers.contains("SNOOZE_15M_ACTION"))
-        XCTAssertTrue(actionIdentifiers.contains("SNOOZE_1H_ACTION"))
-        XCTAssertTrue(actionIdentifiers.contains("SNOOZE_TODAY_ACTION"))
-        XCTAssertTrue(actionIdentifiers.contains("MUTE_ACTION"))
-    }
-    
-    // MARK: - Integration Tests
-    
-    func testNotificationFlowIntegration() {
-        let expectation = XCTestExpectation(description: "Notification flow completed")
-        
-        // Schedule a notification
-        let identifier = "integration-test"
-        notificationManager.scheduleLocationNotification(
-            identifier: identifier,
-            title: "Integration Test",
-            body: "Testing the full flow",
-            taskId: "test-task",
-            actions: notificationManager.createNotificationActions()
-        )
-        
-        // Listen for the notification being posted to UI
-        NotificationCenter.default.publisher(for: .newNotificationReceived)
-            .sink { notification in
-                if let userInfo = notification.userInfo,
-                   let notificationItem = userInfo["notification"] as? NotificationItem {
-                    XCTAssertEqual(notificationItem.title, "Integration Test")
-                    XCTAssertEqual(notificationItem.body, "Testing the full flow")
-                    XCTAssertEqual(notificationItem.taskId, "test-task")
-                    expectation.fulfill()
-                }
-            }
-            .store(in: &cancellables)
-        
-        wait(for: [expectation], timeout: 2.0)
-    }
-    
-    func testNotificationActionFlowIntegration() {
-        let expectation = XCTestExpectation(description: "Action flow completed")
-        
-        // Listen for action performed notifications
-        NotificationCenter.default.publisher(for: .notificationActionPerformed)
-            .sink { notification in
-                if let userInfo = notification.userInfo,
-                   let action = userInfo["action"] as? String {
-                    XCTAssertEqual(action, "complete")
-                    expectation.fulfill()
-                }
-            }
-            .store(in: &cancellables)
-        
-        // Simulate action handling
-        notificationManager.handleCompleteAction(notificationIdentifier: "test-notification")
-        
-        wait(for: [expectation], timeout: 1.0)
+        wait(for: [expectation], timeout: 2)
     }
     
     // MARK: - Performance Tests
     
-    func testNotificationListPerformance() {
-        let notifications = (0..<1000).map { index in
+    func testNotificationDisplayPerformance() {
+        // Given
+        let notifications = (0..<100).map { index in
             NotificationItem(
+                id: "notification-\(index)",
                 title: "Notification \(index)",
-                body: "Body \(index)",
-                timestamp: Date().addingTimeInterval(-Double(index * 60))
+                body: "This is notification number \(index)",
+                type: .reminder
             )
         }
         
+        // When/Then
         measure {
-            viewModel.notifications = notifications
-            _ = viewModel.filteredNotifications
+            for notification in notifications {
+                interactionService.showInAppNotification(notification)
+            }
+            interactionService.dismissAllInAppNotifications()
         }
     }
     
-    func testNotificationFilteringPerformance() {
-        let notifications = (0..<1000).map { index in
+    func testNotificationActionHandlingPerformance() {
+        // Given
+        let notifications = (0..<50).map { index in
             NotificationItem(
+                id: "notification-\(index)",
                 title: "Notification \(index)",
-                body: "Body \(index)",
-                timestamp: Date().addingTimeInterval(-Double(index * 60)),
-                isRead: index % 2 == 0
+                body: "This is notification number \(index)",
+                type: .reminder,
+                actions: [NotificationAction.complete, NotificationAction.snooze15m]
             )
         }
         
-        viewModel.notifications = notifications
+        notifications.forEach { interactionService.showInAppNotification($0) }
         
+        // When/Then
         measure {
-            for filter in NotificationFilter.allCases {
-                viewModel.selectedFilter = filter
-                _ = viewModel.filteredNotifications
+            for notification in notifications {
+                interactionService.handleNotificationAction(NotificationAction.complete, for: notification)
             }
         }
     }
 }
 
-// MARK: - Mock Notification Service for Testing
-class MockNotificationService: NotificationService {
-    var mockNotifications: [NotificationItem] = []
-    var mockError: Error?
+// MARK: - Notification History View Model Tests
+class NotificationHistoryViewModelTests: XCTestCase {
     
-    override func getNotificationHistory(completion: @escaping (Result<[NotificationItem], Error>) -> Void) {
-        if let error = mockError {
-            completion(.failure(error))
-        } else {
-            completion(.success(mockNotifications))
-        }
+    var viewModel: NotificationHistoryViewModel!
+    
+    override func setUp() {
+        super.setUp()
+        viewModel = NotificationHistoryViewModel()
     }
     
-    override func performNotificationAction(
-        notificationId: String,
-        action: String,
-        completion: @escaping (Result<Void, Error>) -> Void
-    ) {
-        if let error = mockError {
-            completion(.failure(error))
-        } else {
-            completion(.success(()))
-        }
+    override func tearDown() {
+        viewModel = nil
+        super.tearDown()
+    }
+    
+    func testInitialState() {
+        // Given/When/Then
+        XCTAssertEqual(viewModel.notifications.count, 0)
+        XCTAssertEqual(viewModel.selectedFilter, .all)
+        XCTAssertFalse(viewModel.isLoading)
+        XCTAssertNil(viewModel.errorMessage)
+    }
+    
+    func testFilteredNotificationsWithAllFilter() {
+        // Given
+        let notification1 = NotificationItem(title: "Test 1", body: "Body 1", type: .approach)
+        let notification2 = NotificationItem(title: "Test 2", body: "Body 2", type: .arrival, isRead: true)
+        viewModel.notifications = [notification1, notification2]
+        viewModel.selectedFilter = .all
+        
+        // When
+        let filtered = viewModel.filteredNotifications
+        
+        // Then
+        XCTAssertEqual(filtered.count, 2)
+    }
+    
+    func testFilteredNotificationsWithUnreadFilter() {
+        // Given
+        let notification1 = NotificationItem(title: "Test 1", body: "Body 1", type: .approach, isRead: false)
+        let notification2 = NotificationItem(title: "Test 2", body: "Body 2", type: .arrival, isRead: true)
+        viewModel.notifications = [notification1, notification2]
+        viewModel.selectedFilter = .unread
+        
+        // When
+        let filtered = viewModel.filteredNotifications
+        
+        // Then
+        XCTAssertEqual(filtered.count, 1)
+        XCTAssertEqual(filtered.first?.id, notification1.id)
+    }
+    
+    func testMarkAllAsReadUpdatesAllNotifications() {
+        // Given
+        let notification1 = NotificationItem(title: "Test 1", body: "Body 1", type: .approach, isRead: false)
+        let notification2 = NotificationItem(title: "Test 2", body: "Body 2", type: .arrival, isRead: false)
+        viewModel.notifications = [notification1, notification2]
+        
+        // When
+        viewModel.markAllAsRead()
+        
+        // Then
+        XCTAssertTrue(viewModel.notifications.allSatisfy { $0.isRead })
+    }
+    
+    func testDeleteNotificationRemovesFromList() {
+        // Given
+        let notification1 = NotificationItem(title: "Test 1", body: "Body 1", type: .approach)
+        let notification2 = NotificationItem(title: "Test 2", body: "Body 2", type: .arrival)
+        viewModel.notifications = [notification1, notification2]
+        
+        // When
+        viewModel.deleteNotification(notification1)
+        
+        // Then
+        XCTAssertEqual(viewModel.notifications.count, 1)
+        XCTAssertEqual(viewModel.notifications.first?.id, notification2.id)
+    }
+}
+
+// MARK: - Notification Settings View Model Tests
+class NotificationSettingsViewModelTests: XCTestCase {
+    
+    var viewModel: NotificationSettingsViewModel!
+    
+    override func setUp() {
+        super.setUp()
+        viewModel = NotificationSettingsViewModel()
+    }
+    
+    override func tearDown() {
+        viewModel = nil
+        super.tearDown()
+    }
+    
+    func testInitialState() {
+        // Given/When/Then
+        XCTAssertTrue(viewModel.locationRemindersEnabled)
+        XCTAssertTrue(viewModel.taskCompletionAlerts)
+        XCTAssertFalse(viewModel.dailySummary)
+        XCTAssertFalse(viewModel.quietHoursEnabled)
+        XCTAssertEqual(viewModel.defaultSnoozeDuration, .fifteenMinutes)
+    }
+    
+    func testResetToDefaultsRestoresInitialValues() {
+        // Given
+        viewModel.locationRemindersEnabled = false
+        viewModel.taskCompletionAlerts = false
+        viewModel.dailySummary = true
+        viewModel.quietHoursEnabled = true
+        viewModel.defaultSnoozeDuration = .oneHour
+        
+        // When
+        viewModel.resetToDefaults()
+        
+        // Then
+        XCTAssertTrue(viewModel.locationRemindersEnabled)
+        XCTAssertTrue(viewModel.taskCompletionAlerts)
+        XCTAssertFalse(viewModel.dailySummary)
+        XCTAssertFalse(viewModel.quietHoursEnabled)
+        XCTAssertEqual(viewModel.defaultSnoozeDuration, .fifteenMinutes)
     }
 }

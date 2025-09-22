@@ -24,9 +24,17 @@ struct MainAppView: View {
     @EnvironmentObject var onboardingManager: OnboardingManager
     
     var body: some View {
-        TaskDashboardView()
-            .environmentObject(locationManager)
-            .environmentObject(notificationManager)
+        ZStack {
+            TaskDashboardView()
+                .environmentObject(locationManager)
+                .environmentObject(notificationManager)
+            
+            // Notification overlay for in-app notifications
+            VStack {
+                NotificationOverlayView()
+                Spacer()
+            }
+        }
     }
 }
 

@@ -292,6 +292,21 @@ enum SnoozeDuration: String, CaseIterable, Codable {
         }
     }
     
+    var description: String {
+        switch self {
+        case .fifteenMinutes:
+            return "Remind me again in 15 minutes"
+        case .oneHour:
+            return "Remind me again in 1 hour"
+        case .fourHours:
+            return "Remind me again in 4 hours"
+        case .today:
+            return "Remind me tomorrow morning"
+        case .tomorrow:
+            return "Remind me the day after tomorrow"
+        }
+    }
+    
     var timeInterval: TimeInterval {
         switch self {
         case .fifteenMinutes:

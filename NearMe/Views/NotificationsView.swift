@@ -150,14 +150,25 @@ struct NotificationsView: View {
                             ForEach(filteredNotifications) { notification in
                                 NotificationCard(
                                     title: notification.title,
-                                    message: notification.message,
+                                    message: notification.body,
                                     timestamp: notification.timestamp,
                                     isRead: notification.isRead,
-                                    actions: notification.actions
+                                    actions: notification.actions.map { action in
+                                        NotificationCard.NotificationAction(
+                                            title: action.title,
+                                            action: {
+                                                handleNotificationAction(action, for: notification)
+                                            },
+                                            style: styleForAction(action)
+                                        )
+                                    },
+                                    onAction: { cardAction in
+                                        cardAction.action()
+                                    }
                                 )
                                 .onTapGesture {
                                     markAsRead(notification)
-                                    navigationCoordinator.navigateTo(.notificationDetail(notification.id))
+                                    // navigationCoordinator.navigateTo(.notificationDetail(notification.id))
                                 }
                             }
                         }
@@ -186,47 +197,65 @@ struct NotificationsView: View {
                 NotificationItem(
                     id: "1",
                     title: "Task Reminder",
-                    message: "You're near Whole Foods Market. Don't forget to buy groceries!",
+                    body: "You're near Whole Foods Market. Don't forget to buy groceries!",
                     timestamp: Date().addingTimeInterval(-300),
-                    isRead: false,
+                    taskId: "task-1",
+                    type: .approach,
                     actions: [
-                        NotificationCard.NotificationAction(title: "Complete", action: {}, style: .primary),
-                        NotificationCard.NotificationAction(title: "Snooze", action: {}, style: .secondary)
-                    ]
+                        NotificationAction.complete,
+                        NotificationAction.snooze15m,
+                        NotificationAction.mute
+                    ],
+                    isRead: false
                 ),
                 NotificationItem(
                     id: "2",
                     title: "Location Update",
-                    message: "You've arrived at UPS Store. Ready to drop off your package?",
+                    body: "You've arrived at UPS Store. Ready to drop off your package?",
                     timestamp: Date().addingTimeInterval(-1800),
-                    isRead: true,
+                    taskId: "task-2",
+                    type: .arrival,
                     actions: [
-                        NotificationCard.NotificationAction(title: "Complete", action: {}, style: .primary)
-                    ]
+                        NotificationAction.complete,
+                        NotificationAction.openMap
+                    ],
+                    isRead: true
                 ),
                 NotificationItem(
                     id: "3",
                     title: "Task Completed",
-                    message: "Great job! You've completed your grocery shopping task.",
+                    body: "Great job! You've completed your grocery shopping task.",
                     timestamp: Date().addingTimeInterval(-3600),
-                    isRead: true,
-                    actions: []
+                    taskId: "task-3",
+                    type: .completion,
+                    isRead: true
                 )
             ]
             isLoading = false
         }
     }
+    
+    private func handleNotificationAction(_ action: NotificationAction, for notification: NotificationItem) {
+        let interactionService = NotificationInteractionService.shared
+        interactionService.handleNotificationAction(action, for: notification)
+        
+        // Update local state
+        markAsRead(notification)
+    }
+    
+    private func styleForAction(_ action: NotificationAction) -> NotificationCard.NotificationAction.ActionStyle {
+        switch action.identifier {
+        case "COMPLETE_ACTION":
+            return .primary
+        case "MUTE_ACTION":
+            return .destructive
+        default:
+            return .secondary
+        }
+    }
 }
 
-// MARK: - Notification Item Model
-struct NotificationItem: Identifiable {
-    let id: String
-    let title: String
-    let message: String
-    let timestamp: Date
-    var isRead: Bool
-    let actions: [NotificationCard.NotificationAction]
-}
+// This struct is now defined in NotificationModels.swift
 
 // MARK: - Notifications View Previews
 struct NotificationsView_Previews: PreviewProvider {

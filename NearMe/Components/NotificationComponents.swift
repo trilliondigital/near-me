@@ -3,57 +3,118 @@ import UserNotifications
 
 // MARK: - Notification Card Component
 struct NotificationCard: View {
-    let notification: NotificationItem
-    let onAction: (NotificationAction) -> Void
+    let title: String
+    let message: String
+    let timestamp: Date
+    let isRead: Bool
+    let actions: [NotificationAction]
+    let onAction: ((NotificationAction) -> Void)?
+    
+    struct NotificationAction: Identifiable {
+        let id = UUID()
+        let title: String
+        let action: () -> Void
+        let style: ActionStyle
+        
+        enum ActionStyle {
+            case primary
+            case secondary
+            case destructive
+        }
+    }
     
     var body: some View {
         VStack(alignment: .leading, spacing: DesignSystem.Spacing.sm) {
             // Header with title and timestamp
             HStack {
                 VStack(alignment: .leading, spacing: DesignSystem.Spacing.xs) {
-                    Text(notification.title)
-                        .font(DesignSystem.Typography.bodyEmphasized)
-                        .foregroundColor(DesignSystem.Colors.textPrimary)
+                    HStack {
+                        Text(title)
+                            .font(DesignSystem.Typography.bodyEmphasized)
+                            .foregroundColor(DesignSystem.Colors.textPrimary)
+                        
+                        if !isRead {
+                            Circle()
+                                .fill(DesignSystem.Colors.primary)
+                                .frame(width: 8, height: 8)
+                        }
+                        
+                        Spacer()
+                    }
                     
-                    Text(notification.body)
+                    Text(message)
                         .font(DesignSystem.Typography.callout)
                         .foregroundColor(DesignSystem.Colors.textSecondary)
-                        .lineLimit(2)
+                        .lineLimit(3)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
                 
-                Spacer()
-                
                 VStack(alignment: .trailing, spacing: DesignSystem.Spacing.xs) {
-                    Text(notification.timestamp.formatted(date: .omitted, time: .shortened))
+                    Text(timestamp.formatted(date: .omitted, time: .shortened))
                         .font(DesignSystem.Typography.caption1)
                         .foregroundColor(DesignSystem.Colors.textTertiary)
                     
-                    if notification.isRead {
-                        Circle()
-                            .fill(DesignSystem.Colors.success)
-                            .frame(width: 8, height: 8)
-                    }
+                    Text(timestamp.formatted(date: .abbreviated, time: .omitted))
+                        .font(DesignSystem.Typography.caption2)
+                        .foregroundColor(DesignSystem.Colors.textTertiary)
                 }
             }
             
             // Action buttons
-            if !notification.actions.isEmpty {
-                HStack(spacing: DesignSystem.Spacing.sm) {
-                    ForEach(notification.actions, id: \.identifier) { action in
-                        NotificationActionButton(
-                            action: action,
-                            onTap: { onAction(action) }
-                        )
+            if !actions.isEmpty {
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: DesignSystem.Spacing.sm) {
+                        ForEach(actions) { action in
+                            Button(action: action.action) {
+                                Text(action.title)
+                                    .font(DesignSystem.Typography.caption1)
+                                    .fontWeight(.medium)
+                                    .padding(.horizontal, DesignSystem.Spacing.md)
+                                    .padding(.vertical, DesignSystem.Spacing.sm)
+                                    .background(
+                                        RoundedRectangle(cornerRadius: DesignSystem.CornerRadius.sm)
+                                            .fill(backgroundColorFor(style: action.style))
+                                    )
+                                    .foregroundColor(foregroundColorFor(style: action.style))
+                            }
+                        }
                     }
+                    .padding(.horizontal, 1) // Prevent clipping
                 }
             }
         }
         .padding(DesignSystem.Spacing.md)
         .background(
             RoundedRectangle(cornerRadius: DesignSystem.CornerRadius.md)
-                .fill(DesignSystem.Colors.card)
+                .fill(isRead ? DesignSystem.Colors.card : DesignSystem.Colors.card.opacity(0.95))
+                .overlay(
+                    RoundedRectangle(cornerRadius: DesignSystem.CornerRadius.md)
+                        .stroke(isRead ? Color.clear : DesignSystem.Colors.primary.opacity(0.2), lineWidth: 1)
+                )
         )
-        .designSystemShadow(DesignSystem.Shadow.small)
+        .designSystemShadow(isRead ? DesignSystem.Shadow.small : DesignSystem.Shadow.medium)
+    }
+    
+    private func backgroundColorFor(style: NotificationAction.ActionStyle) -> Color {
+        switch style {
+        case .primary:
+            return DesignSystem.Colors.primary
+        case .secondary:
+            return DesignSystem.Colors.surface
+        case .destructive:
+            return DesignSystem.Colors.error.opacity(0.1)
+        }
+    }
+    
+    private func foregroundColorFor(style: NotificationAction.ActionStyle) -> Color {
+        switch style {
+        case .primary:
+            return DesignSystem.Colors.textInverse
+        case .secondary:
+            return DesignSystem.Colors.textSecondary
+        case .destructive:
+            return DesignSystem.Colors.error
+        }
     }
 }
 
@@ -361,6 +422,192 @@ struct NotificationPermissionEducationView: View {
         }
         .padding(DesignSystem.Spacing.xl)
         .background(DesignSystem.Colors.background)
+    }
+}
+
+// MARK: - Snooze Duration Picker
+struct SnoozeDurationPicker: View {
+    @Binding var selectedDuration: SnoozeDuration
+    let onSelection: (SnoozeDuration) -> Void
+    @Environment(\.dismiss) private var dismiss
+    
+    var body: some View {
+        NavigationView {
+            VStack(spacing: 0) {
+                // Header
+                VStack(spacing: DesignSystem.Spacing.md) {
+                    Image(systemName: "clock.badge")
+                        .font(.system(size: 48, weight: .light))
+                        .foregroundColor(DesignSystem.Colors.primary)
+                    
+                    VStack(spacing: DesignSystem.Spacing.sm) {
+                        Text("Snooze Duration")
+                            .font(DesignSystem.Typography.title2)
+                            .fontWeight(.bold)
+                            .foregroundColor(DesignSystem.Colors.textPrimary)
+                        
+                        Text("Choose how long to snooze this reminder")
+                            .font(DesignSystem.Typography.body)
+                            .foregroundColor(DesignSystem.Colors.textSecondary)
+                            .multilineTextAlignment(.center)
+                    }
+                }
+                .padding(DesignSystem.Spacing.xl)
+                
+                // Duration options
+                ScrollView {
+                    LazyVStack(spacing: DesignSystem.Spacing.sm) {
+                        ForEach(SnoozeDuration.allCases, id: \.self) { duration in
+                            SnoozeDurationOption(
+                                duration: duration,
+                                isSelected: selectedDuration == duration,
+                                onTap: {
+                                    selectedDuration = duration
+                                    onSelection(duration)
+                                    dismiss()
+                                }
+                            )
+                        }
+                    }
+                    .padding(DesignSystem.Spacing.md)
+                }
+            }
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button("Cancel") {
+                        dismiss()
+                    }
+                    .foregroundColor(DesignSystem.Colors.textSecondary)
+                }
+            }
+        }
+    }
+}
+
+// MARK: - Snooze Duration Option
+struct SnoozeDurationOption: View {
+    let duration: SnoozeDuration
+    let isSelected: Bool
+    let onTap: () -> Void
+    
+    var body: some View {
+        Button(action: onTap) {
+            HStack(spacing: DesignSystem.Spacing.md) {
+                VStack(alignment: .leading, spacing: DesignSystem.Spacing.xs) {
+                    Text(duration.title)
+                        .font(DesignSystem.Typography.bodyEmphasized)
+                        .foregroundColor(DesignSystem.Colors.textPrimary)
+                    
+                    Text(duration.description)
+                        .font(DesignSystem.Typography.callout)
+                        .foregroundColor(DesignSystem.Colors.textSecondary)
+                }
+                
+                Spacer()
+                
+                if isSelected {
+                    Image(systemName: "checkmark.circle.fill")
+                        .font(.system(size: 20))
+                        .foregroundColor(DesignSystem.Colors.primary)
+                } else {
+                    Circle()
+                        .stroke(DesignSystem.Colors.border, lineWidth: 1)
+                        .frame(width: 20, height: 20)
+                }
+            }
+            .padding(DesignSystem.Spacing.md)
+            .background(
+                RoundedRectangle(cornerRadius: DesignSystem.CornerRadius.md)
+                    .fill(isSelected ? DesignSystem.Colors.primary.opacity(0.1) : DesignSystem.Colors.card)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: DesignSystem.CornerRadius.md)
+                            .stroke(isSelected ? DesignSystem.Colors.primary : DesignSystem.Colors.border, lineWidth: 1)
+                    )
+            )
+        }
+        .buttonStyle(PlainButtonStyle())
+    }
+}
+
+// MARK: - In-App Notification Banner
+struct InAppNotificationBanner: View {
+    let notification: NotificationItem
+    let onAction: (NotificationAction) -> Void
+    let onDismiss: () -> Void
+    @State private var isVisible = false
+    
+    var body: some View {
+        VStack(spacing: 0) {
+            HStack(spacing: DesignSystem.Spacing.sm) {
+                // Notification icon
+                Image(systemName: notification.type.icon)
+                    .font(.system(size: 20, weight: .medium))
+                    .foregroundColor(DesignSystem.Colors.primary)
+                    .frame(width: 24, height: 24)
+                
+                // Content
+                VStack(alignment: .leading, spacing: DesignSystem.Spacing.xs) {
+                    Text(notification.title)
+                        .font(DesignSystem.Typography.bodyEmphasized)
+                        .foregroundColor(DesignSystem.Colors.textPrimary)
+                        .lineLimit(1)
+                    
+                    Text(notification.body)
+                        .font(DesignSystem.Typography.callout)
+                        .foregroundColor(DesignSystem.Colors.textSecondary)
+                        .lineLimit(2)
+                }
+                
+                Spacer()
+                
+                // Dismiss button
+                Button(action: onDismiss) {
+                    Image(systemName: "xmark")
+                        .font(.system(size: 14, weight: .medium))
+                        .foregroundColor(DesignSystem.Colors.textTertiary)
+                }
+            }
+            .padding(DesignSystem.Spacing.md)
+            
+            // Quick actions
+            if !notification.actions.isEmpty {
+                HStack(spacing: DesignSystem.Spacing.sm) {
+                    ForEach(notification.actions.prefix(3), id: \.identifier) { action in
+                        Button(action: { onAction(action) }) {
+                            Text(action.title)
+                                .font(DesignSystem.Typography.caption1)
+                                .fontWeight(.medium)
+                                .padding(.horizontal, DesignSystem.Spacing.md)
+                                .padding(.vertical, DesignSystem.Spacing.sm)
+                                .background(
+                                    RoundedRectangle(cornerRadius: DesignSystem.CornerRadius.sm)
+                                        .fill(action.backgroundColor.opacity(0.1))
+                                )
+                                .foregroundColor(action.backgroundColor)
+                        }
+                    }
+                    
+                    Spacer()
+                }
+                .padding(.horizontal, DesignSystem.Spacing.md)
+                .padding(.bottom, DesignSystem.Spacing.md)
+            }
+        }
+        .background(
+            RoundedRectangle(cornerRadius: DesignSystem.CornerRadius.lg)
+                .fill(DesignSystem.Colors.card)
+                .designSystemShadow(DesignSystem.Shadow.large)
+        )
+        .padding(.horizontal, DesignSystem.Spacing.md)
+        .scaleEffect(isVisible ? 1 : 0.95)
+        .opacity(isVisible ? 1 : 0)
+        .animation(.spring(response: 0.4, dampingFraction: 0.8), value: isVisible)
+        .onAppear {
+            withAnimation {
+                isVisible = true
+            }
+        }
     }
 }
 
