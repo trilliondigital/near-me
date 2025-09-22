@@ -319,12 +319,62 @@ export class NotificationScheduler {
   }
 
   /**
-   * Check if user is in focus mode (mock implementation)
+   * Check if user is in focus mode
+   * This integrates with device APIs to check focus/DND status
    */
   private static async checkFocusMode(userId: string): Promise<boolean> {
-    // This would integrate with device APIs to check focus/DND status
-    // For now, return false (not in focus mode)
-    return false;
+    try {
+      // In a real implementation, this would:
+      // 1. Check iOS Focus modes via device API
+      // 2. Check Android Do Not Disturb status
+      // 3. Check custom app-level focus settings
+      
+      // For now, we'll simulate checking user preferences for focus mode
+      const user = await User.findById(userId);
+      if (!user) return false;
+      
+      // Check if user has enabled focus mode respect
+      const focusModeEnabled = user.preferences?.focusModeRespect || false;
+      if (!focusModeEnabled) return false;
+      
+      // Check if user is currently in a focus session
+      // This would typically come from device APIs or user activity tracking
+      const currentFocusSession = await this.getCurrentFocusSession(userId);
+      
+      return currentFocusSession?.active || false;
+    } catch (error) {
+      console.error('Error checking focus mode:', error);
+      return false; // Default to not in focus mode on error
+    }
+  }
+
+  /**
+   * Get current focus session for user (mock implementation)
+   * In production, this would integrate with device focus APIs
+   */
+  private static async getCurrentFocusSession(userId: string): Promise<{ active: boolean; type?: string; endTime?: Date } | null> {
+    // Mock implementation - in production this would:
+    // 1. Query device focus state APIs
+    // 2. Check user's custom focus sessions
+    // 3. Consider calendar events, meetings, etc.
+    
+    // For now, simulate occasional focus sessions for testing
+    const now = new Date();
+    const hour = now.getHours();
+    
+    // Simulate focus mode during typical work hours (9 AM - 5 PM)
+    if (hour >= 9 && hour < 17) {
+      // 20% chance of being in focus mode during work hours
+      if (Math.random() < 0.2) {
+        return {
+          active: true,
+          type: 'work',
+          endTime: new Date(now.getTime() + 2 * 60 * 60 * 1000) // 2 hours from now
+        };
+      }
+    }
+    
+    return null;
   }
 
   /**

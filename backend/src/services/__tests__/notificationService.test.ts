@@ -210,15 +210,20 @@ describe('NotificationService', () => {
   });
 
   describe('bundleNotifications', () => {
-    const createMockNotification = (id: string, location: { latitude: number; longitude: number }): LocationNotification => ({
+    const createMockNotification = (
+      id: string, 
+      location: { latitude: number; longitude: number },
+      type: NotificationType = 'approach',
+      scheduledTime?: Date
+    ): LocationNotification => ({
       id,
       taskId: `task-${id}`,
       userId: 'user-1',
-      type: 'approach',
+      type,
       title: `Notification ${id}`,
       body: `Body ${id}`,
       actions: [],
-      scheduledTime: new Date(),
+      scheduledTime: scheduledTime || new Date(),
       metadata: {
         geofenceId: `geofence-${id}`,
         geofenceType: 'approach_5mi',
@@ -246,6 +251,50 @@ describe('NotificationService', () => {
       expect(notifications[2].bundled).toBeUndefined();
     });
 
+    it('should respect temporal bundling window', async () => {
+      const now = new Date();
+      const notifications = [
+        createMockNotification('1', { latitude: 37.7749, longitude: -122.4194 }, 'approach', now),
+        createMockNotification('2', { latitude: 37.7750, longitude: -122.4195 }, 'approach', new Date(now.getTime() + 2 * 60 * 1000)), // 2 minutes later
+        createMockNotification('3', { latitude: 37.7751, longitude: -122.4196 }, 'approach', new Date(now.getTime() + 10 * 60 * 1000)) // 10 minutes later
+      ];
+
+      const bundles = await NotificationService.bundleNotifications(notifications);
+
+      expect(bundles).toHaveLength(1);
+      expect(bundles[0].notifications).toHaveLength(2); // Only first two should be bundled
+    });
+
+    it('should respect maximum bundle size', async () => {
+      const notifications = Array.from({ length: 7 }, (_, i) => 
+        createMockNotification(
+          `${i + 1}`, 
+          { 
+            latitude: 37.7749 + (i * 0.0001), 
+            longitude: -122.4194 + (i * 0.0001) 
+          }
+        )
+      );
+
+      const bundles = await NotificationService.bundleNotifications(notifications);
+
+      expect(bundles).toHaveLength(1);
+      expect(bundles[0].notifications).toHaveLength(5); // Max bundle size is 5
+    });
+
+    it('should only bundle compatible notification types', async () => {
+      const notifications = [
+        createMockNotification('1', { latitude: 37.7749, longitude: -122.4194 }, 'approach'),
+        createMockNotification('2', { latitude: 37.7750, longitude: -122.4195 }, 'arrival'), // Different type
+        createMockNotification('3', { latitude: 37.7751, longitude: -122.4196 }, 'approach')
+      ];
+
+      const bundles = await NotificationService.bundleNotifications(notifications);
+
+      expect(bundles).toHaveLength(1);
+      expect(bundles[0].notifications).toHaveLength(2); // Only approach notifications bundled together
+    });
+
     it('should create separate bundles for different users', async () => {
       const notifications = [
         createMockNotification('1', { latitude: 37.7749, longitude: -122.4194 }),
@@ -271,6 +320,21 @@ describe('NotificationService', () => {
     it('should handle empty notification array', async () => {
       const bundles = await NotificationService.bundleNotifications([]);
       expect(bundles).toHaveLength(0);
+    });
+
+    it('should create multiple bundles for distant notifications', async () => {
+      const notifications = [
+        createMockNotification('1', { latitude: 37.7749, longitude: -122.4194 }),
+        createMockNotification('2', { latitude: 37.7750, longitude: -122.4195 }), // Close to 1
+        createMockNotification('3', { latitude: 37.7800, longitude: -122.4300 }), // Far from 1&2
+        createMockNotification('4', { latitude: 37.7801, longitude: -122.4301 })  // Close to 3
+      ];
+
+      const bundles = await NotificationService.bundleNotifications(notifications);
+
+      expect(bundles).toHaveLength(2);
+      expect(bundles[0].notifications).toHaveLength(2);
+      expect(bundles[1].notifications).toHaveLength(2);
     });
   });
 

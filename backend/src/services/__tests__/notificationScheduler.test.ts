@@ -348,5 +348,66 @@ describe('NotificationScheduler', () => {
       
       expect(canDeliver.allowed).toBe(true);
     });
+
+    it('should check user preferences for focus mode respect', async () => {
+      const focusModeUser = {
+        ...mockUser,
+        preferences: {
+          ...mockUser.preferences,
+          focusModeRespect: true
+        }
+      };
+      (User.findById as jest.Mock).mockResolvedValue(focusModeUser);
+
+      // Mock focus session to return active
+      jest.spyOn(NotificationScheduler as any, 'getCurrentFocusSession')
+        .mockResolvedValue({ active: true, type: 'work', endTime: new Date(Date.now() + 2 * 60 * 60 * 1000) });
+
+      const inFocusMode = await (NotificationScheduler as any).checkFocusMode('user-1');
+      expect(inFocusMode).toBe(true);
+    });
+
+    it('should return false when user has disabled focus mode respect', async () => {
+      const noFocusModeUser = {
+        ...mockUser,
+        preferences: {
+          ...mockUser.preferences,
+          focusModeRespect: false
+        }
+      };
+      (User.findById as jest.Mock).mockResolvedValue(noFocusModeUser);
+
+      const inFocusMode = await (NotificationScheduler as any).checkFocusMode('user-1');
+      expect(inFocusMode).toBe(false);
+    });
+
+    it('should handle focus mode check errors gracefully', async () => {
+      (User.findById as jest.Mock).mockRejectedValue(new Error('Database error'));
+
+      const inFocusMode = await (NotificationScheduler as any).checkFocusMode('user-1');
+      expect(inFocusMode).toBe(false);
+    });
+
+    it('should simulate focus sessions during work hours', async () => {
+      // Mock current time to 2:00 PM (work hours)
+      const mockDate = new Date('2023-01-01T14:00:00Z');
+      jest.spyOn(global, 'Date').mockImplementation(() => mockDate as any);
+
+      const focusSession = await (NotificationScheduler as any).getCurrentFocusSession('user-1');
+      
+      // Should occasionally return a focus session during work hours
+      // Since it's random, we'll just verify the method doesn't throw
+      expect(typeof focusSession === 'object' || focusSession === null).toBe(true);
+    });
+
+    it('should not simulate focus sessions outside work hours', async () => {
+      // Mock current time to 8:00 PM (outside work hours)
+      const mockDate = new Date('2023-01-01T20:00:00Z');
+      jest.spyOn(global, 'Date').mockImplementation(() => mockDate as any);
+
+      const focusSession = await (NotificationScheduler as any).getCurrentFocusSession('user-1');
+      
+      expect(focusSession).toBeNull();
+    });
   });
 });

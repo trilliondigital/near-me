@@ -67,16 +67,28 @@ router.post('/:notificationId/action', async (req: AuthenticatedRequest, res: Re
     const { action } = req.body;
     const userId = req.user!.id;
 
+    // Validate required fields
     if (!action) {
       return res.status(400).json({
         error: 'Missing required field: action'
       });
     }
 
+    // Validate action type
+    const validActions = ['complete', 'snooze_15m', 'snooze_1h', 'snooze_today', 'open_map', 'mute'];
+    if (!validActions.includes(action)) {
+      return res.status(400).json({
+        error: `Invalid action type. Must be one of: ${validActions.join(', ')}`
+      });
+    }
+
+    // Handle the notification action
     await NotificationService.handleNotificationAction(notificationId, action, userId);
 
-    res.json({
-      message: `Notification action '${action}' processed successfully`
+    res.status(200).json({
+      message: 'Notification action processed successfully',
+      notificationId,
+      action
     });
   } catch (error) {
     next(error);
@@ -85,25 +97,29 @@ router.post('/:notificationId/action', async (req: AuthenticatedRequest, res: Re
 
 /**
  * GET /api/notifications/scheduled
- * Get scheduled notifications for the user
+ * Get scheduled notifications for the current user
  */
 router.get('/scheduled', async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
   try {
     const userId = req.user!.id;
     const scheduledNotifications = NotificationScheduler.getScheduledNotifications(userId);
 
-    res.json({
+    res.status(200).json({
       notifications: scheduledNotifications.map(scheduled => ({
         id: scheduled.id,
-        status: scheduled.status,
-        scheduledTime: scheduled.scheduledTime,
-        attempts: scheduled.attempts,
         notification: {
           id: scheduled.notification.id,
           type: scheduled.notification.type,
           title: scheduled.notification.title,
-          body: scheduled.notification.body
-        }
+          body: scheduled.notification.body,
+          actions: scheduled.notification.actions,
+          metadata: scheduled.notification.metadata
+        },
+        scheduledTime: scheduled.scheduledTime,
+        status: scheduled.status,
+        attempts: scheduled.attempts,
+        lastAttempt: scheduled.lastAttempt,
+        error: scheduled.error
       }))
     });
   } catch (error) {
@@ -112,40 +128,83 @@ router.get('/scheduled', async (req: AuthenticatedRequest, res: Response, next: 
 });
 
 /**
- * DELETE /api/notifications/scheduled/:scheduledId
+ * DELETE /api/notifications/:notificationId
  * Cancel a scheduled notification
  */
-router.delete('/scheduled/:scheduledId', async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
+router.delete('/:notificationId', async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
   try {
-    const { scheduledId } = req.params;
-    const cancelled = await NotificationScheduler.cancelNotification(scheduledId);
+    const { notificationId } = req.params;
+    const userId = req.user!.id;
 
-    if (!cancelled) {
+    // Verify the notification belongs to the user
+    const scheduledNotifications = NotificationScheduler.getScheduledNotifications(userId);
+    const userNotification = scheduledNotifications.find(n => n.id === notificationId);
+    
+    if (!userNotification) {
       return res.status(404).json({
-        error: 'Scheduled notification not found'
+        error: 'Notification not found or does not belong to user'
       });
     }
 
-    res.json({
-      message: 'Notification cancelled successfully'
-    });
+    const cancelled = await NotificationScheduler.cancelNotification(notificationId);
+
+    if (cancelled) {
+      res.status(200).json({
+        message: 'Notification cancelled successfully',
+        notificationId
+      });
+    } else {
+      res.status(404).json({
+        error: 'Notification not found'
+      });
+    }
   } catch (error) {
     next(error);
   }
 });
 
 /**
- * POST /api/notifications/process-pending
- * Process pending notifications (admin/background job endpoint)
+ * POST /api/notifications/bundle
+ * Bundle multiple notifications for dense POI areas
  */
-router.post('/process-pending', async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
+router.post('/bundle', async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
   try {
-    // This would typically be restricted to admin users or called by background jobs
-    const stats = await NotificationScheduler.processPendingNotifications();
+    const { notifications } = req.body;
+    const userId = req.user!.id;
 
-    res.json({
-      message: 'Pending notifications processed',
-      stats
+    // Validate required fields
+    if (!notifications || !Array.isArray(notifications)) {
+      return res.status(400).json({
+        error: 'Missing or invalid notifications array'
+      });
+    }
+
+    // Filter notifications to only include those belonging to the user
+    const userNotifications = notifications.filter((n: any) => n.userId === userId);
+
+    if (userNotifications.length === 0) {
+      return res.status(400).json({
+        error: 'No notifications found for user'
+      });
+    }
+
+    // Bundle the notifications
+    const bundles = await NotificationService.bundleNotifications(userNotifications);
+
+    res.status(200).json({
+      message: 'Notifications bundled successfully',
+      bundles: bundles.map(bundle => ({
+        id: bundle.id,
+        title: bundle.title,
+        body: bundle.body,
+        actions: bundle.actions,
+        location: bundle.location,
+        radius: bundle.radius,
+        scheduledTime: bundle.scheduledTime,
+        notificationCount: bundle.notifications.length
+      })),
+      bundledCount: bundles.reduce((sum, bundle) => sum + bundle.notifications.length, 0),
+      totalCount: userNotifications.length
     });
   } catch (error) {
     next(error);
@@ -154,65 +213,26 @@ router.post('/process-pending', async (req: AuthenticatedRequest, res: Response,
 
 /**
  * GET /api/notifications/stats
- * Get notification system statistics
+ * Get notification statistics for the current user
  */
 router.get('/stats', async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
   try {
-    const stats = NotificationScheduler.getStats();
-
-    res.json({
-      scheduler: stats
-    });
-  } catch (error) {
-    next(error);
-  }
-});
-
-/**
- * POST /api/notifications/test
- * Test notification creation (development only)
- */
-router.post('/test', async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
-  try {
-    if (process.env.NODE_ENV === 'production') {
-      return res.status(403).json({
-        error: 'Test endpoint not available in production'
-      });
-    }
-
-    const { type = 'approach', title = 'Test Notification', body = 'This is a test notification' } = req.body;
     const userId = req.user!.id;
+    const userNotifications = NotificationScheduler.getScheduledNotifications(userId);
+    const allStats = NotificationScheduler.getStats();
 
-    // Create a test notification
-    const testNotification = {
-      id: `test_${Date.now()}`,
-      taskId: 'test-task',
-      userId,
-      type,
-      title,
-      body,
-      actions: [
-        { id: 'complete', title: 'Complete', type: 'complete' },
-        { id: 'snooze', title: 'Snooze', type: 'snooze_15m' }
-      ],
-      scheduledTime: new Date(),
-      metadata: {
-        geofenceId: 'test-geofence',
-        geofenceType: 'approach_5mi',
-        location: { latitude: 37.7749, longitude: -122.4194 }
-      }
-    } as any;
+    // Calculate user-specific stats
+    const userStats = {
+      total: userNotifications.length,
+      pending: userNotifications.filter(n => n.status === 'pending').length,
+      delivered: userNotifications.filter(n => n.status === 'delivered').length,
+      failed: userNotifications.filter(n => n.status === 'failed').length,
+      cancelled: userNotifications.filter(n => n.status === 'cancelled').length
+    };
 
-    const scheduled = await NotificationScheduler.scheduleNotification(testNotification);
-
-    res.json({
-      message: 'Test notification created',
-      notification: testNotification,
-      scheduled: {
-        id: scheduled.id,
-        status: scheduled.status,
-        scheduledTime: scheduled.scheduledTime
-      }
+    res.status(200).json({
+      user: userStats,
+      system: allStats
     });
   } catch (error) {
     next(error);

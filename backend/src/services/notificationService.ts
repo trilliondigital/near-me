@@ -236,25 +236,44 @@ export class NotificationService {
     const bundles: NotificationBundle[] = [];
     const processedNotifications = new Set<string>();
     const BUNDLE_RADIUS = 500; // 500 meters
+    const MAX_BUNDLE_SIZE = 5; // Maximum notifications per bundle
+    const BUNDLE_TIME_WINDOW = 5 * 60 * 1000; // 5 minutes in milliseconds
 
-    for (const notification of notifications) {
+    // Sort notifications by scheduled time to handle temporal bundling
+    const sortedNotifications = [...notifications].sort(
+      (a, b) => a.scheduledTime.getTime() - b.scheduledTime.getTime()
+    );
+
+    for (const notification of sortedNotifications) {
       if (processedNotifications.has(notification.id)) continue;
 
       // Find nearby notifications to bundle
-      const nearbyNotifications = notifications.filter(n => {
+      const nearbyNotifications = sortedNotifications.filter(n => {
         if (processedNotifications.has(n.id) || n.id === notification.id) return false;
         if (n.userId !== notification.userId) return false;
         
+        // Check spatial proximity
         const distance = this.calculateDistance(
           notification.metadata.location,
           n.metadata.location
         );
-        return distance <= BUNDLE_RADIUS;
+        if (distance > BUNDLE_RADIUS) return false;
+        
+        // Check temporal proximity (within 5 minutes)
+        const timeDiff = Math.abs(
+          n.scheduledTime.getTime() - notification.scheduledTime.getTime()
+        );
+        if (timeDiff > BUNDLE_TIME_WINDOW) return false;
+        
+        // Check if notification types are compatible for bundling
+        if (!this.areNotificationTypesCompatible(notification.type, n.type)) return false;
+        
+        return true;
       });
 
       if (nearbyNotifications.length > 0) {
-        // Create bundle
-        const bundleNotifications = [notification, ...nearbyNotifications];
+        // Limit bundle size
+        const bundleNotifications = [notification, ...nearbyNotifications.slice(0, MAX_BUNDLE_SIZE - 1)];
         const bundle = await this.createNotificationBundle(bundleNotifications);
         bundles.push(bundle);
 
@@ -271,6 +290,23 @@ export class NotificationService {
     }
 
     return bundles;
+  }
+
+  /**
+   * Check if notification types are compatible for bundling
+   */
+  private static areNotificationTypesCompatible(type1: NotificationType, type2: NotificationType): boolean {
+    // All approach notifications can be bundled together
+    if (type1 === 'approach' && type2 === 'approach') return true;
+    
+    // Arrival notifications can be bundled together
+    if (type1 === 'arrival' && type2 === 'arrival') return true;
+    
+    // Post-arrival notifications can be bundled together
+    if (type1 === 'post_arrival' && type2 === 'post_arrival') return true;
+    
+    // Mixed types are generally not bundled to maintain clarity
+    return false;
   }
 
   /**
