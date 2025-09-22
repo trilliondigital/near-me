@@ -16,6 +16,9 @@ struct SettingsView: View {
                     // Profile Section
                     ProfileSection()
                     
+                    // Subscription Section
+                    SubscriptionSection()
+                    
                     // Location Settings
                     SettingsSection(title: "Location") {
                         VStack(spacing: DesignSystem.Spacing.md) {
@@ -169,8 +172,17 @@ struct SettingsView: View {
                     }
                     
                     // Privacy Settings
-                    SettingsSection(title: "Privacy") {
+                    SettingsSection(title: "Privacy & Data") {
                         VStack(spacing: DesignSystem.Spacing.md) {
+                            SettingsRow(
+                                title: "Privacy Settings",
+                                icon: "hand.raised.fill",
+                                subtitle: "Location mode, data controls",
+                                action: {
+                                    navigationCoordinator.navigateTo(.privacySettings)
+                                }
+                            )
+                            
                             SettingsRow(
                                 title: "Privacy Policy",
                                 icon: "doc.text",
@@ -185,23 +197,6 @@ struct SettingsView: View {
                                 action: {
                                     navigationCoordinator.navigateTo(.terms)
                                 }
-                            )
-                            
-                            SettingsRow(
-                                title: "Data Export",
-                                icon: "square.and.arrow.up",
-                                action: {
-                                    // TODO: Implement data export
-                                }
-                            )
-                            
-                            SettingsRow(
-                                title: "Delete Account",
-                                icon: "trash",
-                                action: {
-                                    // TODO: Implement account deletion
-                                },
-                                isDestructive: true
                             )
                         }
                     }
@@ -256,6 +251,71 @@ struct SettingsView: View {
             Button("Cancel", role: .cancel) {}
         } message: {
             Text("Please enable notifications in Settings to receive location-based reminders.")
+        }
+    }
+}
+
+// MARK: - Subscription Section
+struct SubscriptionSection: View {
+    @StateObject private var userService = UserService.shared
+    @State private var showingPremiumView = false
+    @State private var showingSubscriptionManagement = false
+    
+    var body: some View {
+        SettingsSection(title: "Subscription") {
+            VStack(spacing: DesignSystem.Spacing.md) {
+                if let user = userService.currentUser {
+                    HStack {
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text("Current Plan")
+                                .font(DesignSystem.Typography.body)
+                                .foregroundColor(DesignSystem.Colors.textSecondary)
+                            
+                            HStack {
+                                PremiumBadge(status: user.premiumStatus, size: .small)
+                                
+                                if user.isPremium {
+                                    Text("Premium")
+                                        .font(DesignSystem.Typography.body)
+                                        .fontWeight(.medium)
+                                        .foregroundColor(DesignSystem.Colors.textPrimary)
+                                }
+                            }
+                        }
+                        
+                        Spacer()
+                        
+                        if user.isPremium {
+                            Button("Manage") {
+                                showingSubscriptionManagement = true
+                            }
+                            .font(DesignSystem.Typography.body)
+                            .foregroundColor(DesignSystem.Colors.primary)
+                        } else {
+                            Button("Upgrade") {
+                                showingPremiumView = true
+                            }
+                            .font(DesignSystem.Typography.body)
+                            .foregroundColor(DesignSystem.Colors.primary)
+                        }
+                    }
+                    
+                    if !user.isPremium {
+                        if let taskLimit = userService.taskLimitStatus {
+                            TaskLimitProgress(status: taskLimit)
+                        }
+                    }
+                }
+            }
+        }
+        .sheet(isPresented: $showingPremiumView) {
+            PremiumView()
+        }
+        .sheet(isPresented: $showingSubscriptionManagement) {
+            SubscriptionManagementView()
+        }
+        .onAppear {
+            userService.fetchCurrentUser()
         }
     }
 }

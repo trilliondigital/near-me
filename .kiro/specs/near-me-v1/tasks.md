@@ -164,7 +164,7 @@
 
 ## Phase 7: Premium Features and Monetization
 
-- [ ] 18. Implement freemium model and limitations
+- [x] 18. Implement freemium model and limitations
   - Create task limit enforcement for free users (3 active tasks maximum)
   - Build premium feature detection and gating throughout the app
   - Implement feature limitation UI with upgrade prompts
@@ -173,7 +173,7 @@
   - Write tests for freemium limitations and premium feature access
   - _Requirements: 7.3, 7.4_
 
-- [ ] 19. Build soft paywall and subscription system
+- [x] 19. Build soft paywall and subscription system
   - Create soft paywall UI with premium feature highlights and pricing
   - Implement trial start functionality with clear terms and benefits
   - Build subscription management with App Store/Play Store integration
@@ -184,7 +184,7 @@
 
 ## Phase 8: Privacy, Security, and Performance
 
-- [ ] 20. Implement privacy controls and data minimization
+- [x] 20. Implement privacy controls and data minimization
   - Create foreground-only location mode with appropriate UI indicators
   - Implement on-device geofence evaluation to minimize server data
   - Build data export functionality for user privacy rights

@@ -80,6 +80,8 @@ class LocationManager: NSObject, ObservableObject {
     @Published var locationError: LocationError?
     @Published var batteryOptimizationEnabled = true
     @Published var significantLocationChangesEnabled = true
+    @Published var foregroundOnlyMode = false
+    @Published var privacyModeActive = false
     
     // MARK: - Constants
     private let maxActiveGeofences = 20
@@ -92,6 +94,7 @@ class LocationManager: NSObject, ObservableObject {
         super.init()
         setupLocationManager()
         setupBackgroundObservers()
+        setupPrivacyObservers()
     }
     
     private func setupLocationManager() {
@@ -115,6 +118,30 @@ class LocationManager: NSObject, ObservableObject {
             name: UIApplication.willEnterForegroundNotification,
             object: nil
         )
+    }
+    
+    private func setupPrivacyObservers() {
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(privacyModeChanged(_:)),
+            name: .privacyModeChanged,
+            object: nil
+        )
+    }
+    
+    @objc private func privacyModeChanged(_ notification: Notification) {
+        guard let allowBackground = notification.userInfo?["allowBackground"] as? Bool else { return }
+        
+        DispatchQueue.main.async {
+            self.foregroundOnlyMode = !allowBackground
+            self.privacyModeActive = true
+            
+            if self.foregroundOnlyMode {
+                self.stopBackgroundLocationServices()
+            } else if self.authorizationStatus == .authorizedAlways {
+                self.resumeBackgroundLocationServices()
+            }
+        }
     }
     
     @objc private func appDidEnterBackground() {
@@ -316,6 +343,42 @@ class LocationManager: NSObject, ObservableObject {
         guard let currentLocation = currentLocation else { return nil }
         let targetLocation = CLLocation(latitude: coordinate.latitude, longitude: coordinate.longitude)
         return currentLocation.distance(from: targetLocation)
+    }
+    
+    // MARK: - Privacy Controls
+    
+    /// Stop background location services for privacy mode
+    func stopBackgroundLocationServices() {
+        guard foregroundOnlyMode else { return }
+        
+        locationManager.stopMonitoringSignificantLocationChanges()
+        locationManager.stopMonitoringVisits()
+        
+        // Stop all geofence monitoring in foreground-only mode
+        for region in locationManager.monitoredRegions {
+            locationManager.stopMonitoring(for: region)
+        }
+        
+        significantLocationChangesEnabled = false
+        print("Stopped background location services for privacy mode")
+    }
+    
+    /// Resume background location services when privacy mode allows
+    func resumeBackgroundLocationServices() {
+        guard !foregroundOnlyMode && authorizationStatus == .authorizedAlways else { return }
+        
+        startSignificantLocationChanges()
+        startVisitMonitoring()
+        
+        // Re-register geofences
+        reregisterGeofencesIfNeeded()
+        
+        print("Resumed background location services")
+    }
+    
+    /// Check if background location is available considering privacy settings
+    func isBackgroundLocationAvailable() -> Bool {
+        return !foregroundOnlyMode && authorizationStatus == .authorizedAlways
     }
     
     // MARK: - Battery Optimization

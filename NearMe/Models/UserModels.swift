@@ -207,3 +207,54 @@ struct UpdateUserRequest: Codable {
         case premiumStatus = "premium_status"
     }
 }
+
+// MARK: - Subscription Models
+
+struct SubscriptionResponse: Codable {
+    let subscription: SubscriptionInfo?
+}
+
+struct SubscriptionInfo: Codable, Identifiable {
+    let id: String
+    let userId: String
+    let planId: String
+    let status: String
+    let startDate: Date
+    let endDate: Date
+    let trialEndDate: Date?
+    let autoRenew: Bool
+    let platform: String
+    let createdAt: Date
+    let updatedAt: Date
+    
+    enum CodingKeys: String, CodingKey {
+        case id
+        case userId = "user_id"
+        case planId = "plan_id"
+        case status
+        case startDate = "start_date"
+        case endDate = "end_date"
+        case trialEndDate = "trial_end_date"
+        case autoRenew = "auto_renew"
+        case platform
+        case createdAt = "created_at"
+        case updatedAt = "updated_at"
+    }
+    
+    var isActive: Bool {
+        return status == "active" || status == "trial"
+    }
+    
+    var isTrial: Bool {
+        return status == "trial"
+    }
+    
+    var isExpired: Bool {
+        return endDate < Date()
+    }
+}
+
+struct TrialRequest: Codable {
+    let planId: String
+    let platform: String
+}

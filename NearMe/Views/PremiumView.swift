@@ -2,10 +2,13 @@ import SwiftUI
 
 struct PremiumView: View {
     @StateObject private var userService = UserService.shared
+    @StateObject private var subscriptionService = SubscriptionService.shared
     @Environment(\.dismiss) private var dismiss
     
     @State private var selectedTab = 0
     @State private var showingTrialAlert = false
+    @State private var showingPurchaseAlert = false
+    @State private var selectedProduct: Product?
     
     var body: some View {
         NavigationView {
@@ -31,6 +34,13 @@ struct PremiumView: View {
                     
                     // Action Buttons
                     actionButtons
+                    
+                    // Loading indicator
+                    if subscriptionService.isLoading {
+                        ProgressView("Processing...")
+                            .frame(maxWidth: .infinity)
+                            .padding()
+                    }
                 }
                 .padding()
             }
@@ -46,14 +56,54 @@ struct PremiumView: View {
         }
         .alert("Start Free Trial", isPresented: $showingTrialAlert) {
             Button("Start Trial") {
-                userService.startTrial()
+                if let product = selectedProduct {
+                    Task {
+                        do {
+                            try await subscriptionService.startTrial(for: product)
+                            await userService.fetchCurrentUser()
+                        } catch {
+                            // Error handling is done in SubscriptionService
+                        }
+                    }
+                }
             }
             Button("Cancel", role: .cancel) {}
         } message: {
             Text("Start your 7-day free trial to unlock all premium features. Cancel anytime.")
         }
+        .alert("Purchase Premium", isPresented: $showingPurchaseAlert) {
+            Button("Purchase") {
+                if let product = selectedProduct {
+                    Task {
+                        do {
+                            try await subscriptionService.purchase(product)
+                            await userService.fetchCurrentUser()
+                        } catch {
+                            // Error handling is done in SubscriptionService
+                        }
+                    }
+                }
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            if let product = selectedProduct {
+                Text("Purchase \(product.displayName) for \(product.localizedPrice)?")
+            }
+        }
+        .alert("Error", isPresented: .constant(subscriptionService.errorMessage != nil)) {
+            Button("OK") {
+                subscriptionService.errorMessage = nil
+            }
+        } message: {
+            if let errorMessage = subscriptionService.errorMessage {
+                Text(errorMessage)
+            }
+        }
         .onAppear {
             userService.fetchCurrentUser()
+            Task {
+                await subscriptionService.loadProducts()
+            }
         }
     }
     
@@ -167,25 +217,34 @@ struct PremiumView: View {
                     action: nil
                 )
                 
-                // Premium Plan
-                PricingCard(
-                    title: "Premium",
-                    price: "$4.99",
-                    period: "month",
-                    features: [
-                        "Unlimited tasks",
-                        "Custom notification sounds",
-                        "Detailed notifications",
-                        "Advanced geofencing",
-                        "Priority support",
-                        "Export data"
-                    ],
-                    isCurrentPlan: userService.currentUser?.premiumStatus == .premium,
-                    isRecommended: true,
-                    action: {
-                        // Handle subscription purchase
-                    }
-                )
+                // Premium Plans from StoreKit
+                ForEach(subscriptionService.availableProducts, id: \.id) { product in
+                    PricingCard(
+                        title: product.isYearly ? "Premium Yearly" : "Premium Monthly",
+                        price: product.localizedPrice,
+                        period: product.isYearly ? "year" : "month",
+                        features: [
+                            "Unlimited tasks",
+                            "Custom notification sounds",
+                            "Detailed notifications",
+                            "Advanced geofencing",
+                            "Priority support",
+                            "Export data"
+                        ],
+                        isCurrentPlan: subscriptionService.purchasedProducts.contains(where: { $0.id == product.id }),
+                        isRecommended: product.isMonthly,
+                        action: {
+                            selectedProduct = product
+                            showingPurchaseAlert = true
+                        }
+                    )
+                }
+                
+                if subscriptionService.availableProducts.isEmpty && !subscriptionService.isLoading {
+                    Text("Unable to load subscription options")
+                        .foregroundColor(.secondary)
+                        .padding()
+                }
             }
         }
     }
@@ -194,23 +253,35 @@ struct PremiumView: View {
     private var actionButtons: some View {
         VStack(spacing: 12) {
             if userService.currentUser?.premiumStatus == .free {
-                Button("Start 7-Day Free Trial") {
-                    showingTrialAlert = true
+                if let monthlyProduct = subscriptionService.availableProducts.first(where: { $0.isMonthly }) {
+                    Button("Start 7-Day Free Trial") {
+                        selectedProduct = monthlyProduct
+                        showingTrialAlert = true
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .frame(maxWidth: .infinity)
+                    .disabled(subscriptionService.isLoading)
                 }
-                .buttonStyle(.borderedProminent)
-                .frame(maxWidth: .infinity)
                 
-                Button("Upgrade to Premium") {
-                    // Handle direct purchase
+                Button("Restore Purchases") {
+                    Task {
+                        await subscriptionService.restorePurchases()
+                        await userService.fetchCurrentUser()
+                    }
                 }
                 .buttonStyle(.bordered)
                 .frame(maxWidth: .infinity)
+                .disabled(subscriptionService.isLoading)
             } else if userService.currentUser?.premiumStatus == .trial {
-                Button("Upgrade to Premium") {
-                    // Handle subscription purchase
+                if let monthlyProduct = subscriptionService.availableProducts.first(where: { $0.isMonthly }) {
+                    Button("Upgrade to Premium") {
+                        selectedProduct = monthlyProduct
+                        showingPurchaseAlert = true
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .frame(maxWidth: .infinity)
+                    .disabled(subscriptionService.isLoading)
                 }
-                .buttonStyle(.borderedProminent)
-                .frame(maxWidth: .infinity)
             }
             
             Text("Cancel anytime • No hidden fees")

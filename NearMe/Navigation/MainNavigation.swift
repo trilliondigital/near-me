@@ -59,6 +59,7 @@ enum NavigationDestination: Hashable {
     case placeDetail(String) // place ID
     case notificationDetail(String) // notification ID
     case settings
+    case privacySettings
     case about
     case privacy
     case terms
@@ -163,6 +164,8 @@ struct MainTabView: View {
             NotificationDetailView(notificationId: notificationId)
         case .settings:
             SettingsView()
+        case .privacySettings:
+            PrivacySettingsView()
         case .about:
             AboutView()
         case .privacy:

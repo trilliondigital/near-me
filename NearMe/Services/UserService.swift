@@ -178,8 +178,62 @@ class UserService: ObservableObject {
             .eraseToAnyPublisher()
     }
     
-    /// Start premium trial
+    /// Start premium trial via backend
+    func startTrial(planId: String = "premium_monthly") async throws {
+        isLoading = true
+        error = nil
+        
+        let trialRequest = TrialRequest(planId: planId, platform: "ios")
+        
+        do {
+            let response: APIResponse<SubscriptionResponse> = try await APIClient.shared.request(
+                endpoint: "/subscriptions/trial",
+                method: .POST,
+                body: trialRequest
+            )
+            
+            // Update user status after successful trial start
+            await fetchCurrentUser()
+            
+            await MainActor.run {
+                self.isLoading = false
+            }
+        } catch {
+            await MainActor.run {
+                self.error = .networkError(error.localizedDescription)
+                self.isLoading = false
+            }
+            throw error
+        }
+    }
+    
+    /// Legacy start trial method for compatibility
     func startTrial() {
+        Task {
+            do {
+                try await startTrial()
+            } catch {
+                // Error is already handled in the async version
+            }
+        }
+    }
+    
+    /// Get subscription status
+    func getSubscriptionStatus() async -> SubscriptionResponse? {
+        do {
+            let response: APIResponse<SubscriptionResponse> = try await APIClient.shared.request(
+                endpoint: "/subscriptions/current",
+                method: .GET
+            )
+            return response.data
+        } catch {
+            print("Failed to get subscription status: \(error)")
+            return nil
+        }
+    }
+        
+    /// Legacy method - keeping for backward compatibility
+    private func legacyStartTrial() {
         isLoading = true
         error = nil
         

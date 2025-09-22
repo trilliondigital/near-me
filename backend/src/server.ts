@@ -17,8 +17,11 @@ import notificationPersistenceRoutes from './routes/notificationPersistence';
 import notificationManagerRoutes from './routes/notificationManager';
 import backgroundProcessorRoutes from './routes/backgroundProcessor';
 import pushNotificationRoutes from './routes/pushNotifications';
+import subscriptionRoutes from './routes/subscriptions';
+import privacyRoutes from './routes/privacy';
 import { BackgroundProcessor } from './services/backgroundProcessor';
 import { PushNotificationService } from './services/pushNotificationService';
+import { SubscriptionExpirationService } from './services/subscriptionExpirationService';
 
 // Load environment variables
 dotenv.config();
@@ -52,6 +55,8 @@ app.use('/api/notifications', notificationRoutes);
 app.use('/api/notifications/persistence', notificationPersistenceRoutes);
 app.use('/api/notifications/manager', notificationManagerRoutes);
 app.use('/api/push-notifications', pushNotificationRoutes);
+app.use('/api/subscriptions', subscriptionRoutes);
+app.use('/api/privacy', privacyRoutes);
 app.use('/api/background', backgroundProcessorRoutes);
 
 // Error handling middleware
@@ -96,6 +101,10 @@ app.listen(PORT, () => {
     
     BackgroundProcessor.start();
     console.log('🔄 Background processor started for notification management');
+    
+    // Start subscription expiration service
+    SubscriptionExpirationService.start();
+    console.log('⏰ Subscription expiration service started');
   }
 });
 
