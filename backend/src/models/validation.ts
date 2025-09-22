@@ -188,3 +188,40 @@ export function validateTaskLimit(taskCount: number, premiumStatus: PremiumStatu
     throw new ValidationError('Free users are limited to 3 active tasks', []);
   }
 }
+
+// Individual validation functions for models
+export function validateUser(data: any) {
+  return createUserSchema.validate(data);
+}
+
+export function validateUpdateUser(data: any) {
+  return updateUserSchema.validate(data);
+}
+
+export function validatePlace(data: any) {
+  return createPlaceSchema.validate(data);
+}
+
+export function validateUpdatePlace(data: any) {
+  return updatePlaceSchema.validate(data);
+}
+
+export function validateTask(data: any) {
+  return createTaskSchema.validate(data);
+}
+
+export function validateUpdateTask(data: any) {
+  return updateTaskSchema.validate(data);
+}
+
+export function validateGeofence(data: any) {
+  return createGeofenceSchema.validate(data);
+}
+
+export function validatePOI(data: any) {
+  return createPOISchema.validate(data);
+}
+
+export function validateEvent(data: any) {
+  return createEventSchema.validate(data);
+}

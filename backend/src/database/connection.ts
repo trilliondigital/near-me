@@ -94,6 +94,13 @@ export function getDatabase(): Pool {
 }
 
 /**
+ * Get database connection (alias for getDatabase)
+ */
+export function getDbConnection(): Pool {
+  return getDatabase();
+}
+
+/**
  * Get Redis client instance
  */
 export function getRedis(): RedisClientType {
