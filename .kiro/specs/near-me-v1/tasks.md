@@ -127,7 +127,7 @@
   - Write UI tests for component behavior and navigation flows
   - _Requirements: 2.4, 3.4, 6.4_
 
-- [ ] 14. Implement task creation and editing workflows
+- [x] 14. Implement task creation and editing workflows
   - Build task creation form with location selection (custom place vs POI category)
   - Create map-based place selection with search functionality
   - Implement POI category selection with nearby options
