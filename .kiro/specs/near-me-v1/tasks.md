@@ -107,7 +107,7 @@
   - Write tests for snooze logic, persistence, and quiet hours
   - _Requirements: 5.5, 5.6, 5.7_
 
-- [ ] 12. Integrate push notification services
+- [x] 12. Integrate push notification services
   - Set up Apple Push Notification Service (APNs) for iOS
   - Configure Firebase Cloud Messaging (FCM) for Android
   - Implement push notification token management and registration

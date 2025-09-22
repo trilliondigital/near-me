@@ -11,26 +11,28 @@ import java.util.Calendar
 class NotificationActionReceiver : BroadcastReceiver() {
     
     override fun onReceive(context: Context, intent: Intent) {
-        val action = intent.getStringExtra("action")
+        val action = intent.action ?: intent.getStringExtra("action")
         val notificationId = intent.getIntExtra("notificationId", -1)
+        val taskId = intent.getStringExtra("task_id")
+        val fcmNotificationId = intent.getStringExtra("notification_id")
         
-        Log.d("NotificationAction", "Received action: $action for notification: $notificationId")
+        Log.d("NotificationAction", "Received action: $action for notification: $notificationId, task: $taskId")
         
         when (action) {
-            "COMPLETE" -> {
-                handleCompleteAction(context, notificationId)
+            "COMPLETE_ACTION", "COMPLETE" -> {
+                handleCompleteAction(context, taskId ?: extractTaskIdFromNotificationId(notificationId), fcmNotificationId)
             }
-            "SNOOZE_15M" -> {
-                handleSnoozeAction(context, notificationId, "15m")
+            "SNOOZE_ACTION", "SNOOZE_15M" -> {
+                handleSnoozeAction(context, taskId ?: extractTaskIdFromNotificationId(notificationId), "15m", fcmNotificationId)
             }
             "SNOOZE_1H" -> {
-                handleSnoozeAction(context, notificationId, "1h")
+                handleSnoozeAction(context, taskId ?: extractTaskIdFromNotificationId(notificationId), "1h", fcmNotificationId)
             }
             "SNOOZE_TODAY" -> {
-                handleSnoozeAction(context, notificationId, "today")
+                handleSnoozeAction(context, taskId ?: extractTaskIdFromNotificationId(notificationId), "today", fcmNotificationId)
             }
-            "MUTE" -> {
-                handleMuteAction(context, notificationId)
+            "MUTE_ACTION", "MUTE" -> {
+                handleMuteAction(context, taskId ?: extractTaskIdFromNotificationId(notificationId), fcmNotificationId)
             }
         }
         
@@ -39,37 +41,32 @@ class NotificationActionReceiver : BroadcastReceiver() {
         notificationManager.cancelNotification(notificationId)
     }
     
-    private fun handleCompleteAction(context: Context, notificationId: Int) {
-        Log.d("NotificationAction", "Task completed for notification: $notificationId")
+    private fun handleCompleteAction(context: Context, taskId: String, notificationId: String?) {
+        Log.d("NotificationAction", "Task completed: $taskId")
         
-        // Extract task ID from notification ID
-        val taskId = extractTaskIdFromNotificationId(notificationId)
-        
-        // TODO: Send completion to backend API
-        sendTaskCompletion(context, taskId)
+        // Send completion to backend API
+        sendNotificationAction(context, notificationId ?: "notification_$taskId", "complete")
     }
     
-    private fun handleSnoozeAction(context: Context, notificationId: Int, duration: String) {
-        Log.d("NotificationAction", "Task snoozed for $duration, notification: $notificationId")
+    private fun handleSnoozeAction(context: Context, taskId: String, duration: String, notificationId: String?) {
+        Log.d("NotificationAction", "Task snoozed for $duration: $taskId")
         
-        // Extract task ID from notification ID
-        val taskId = extractTaskIdFromNotificationId(notificationId)
+        // Send snooze to backend API
+        val action = when (duration) {
+            "15m" -> "snooze_15m"
+            "1h" -> "snooze_1h"
+            "today" -> "snooze_today"
+            else -> "snooze_15m"
+        }
         
-        // Schedule snooze notification
-        scheduleSnoozeNotification(context, taskId, duration, notificationId)
-        
-        // TODO: Send snooze to backend API
-        sendTaskSnooze(context, taskId, duration)
+        sendNotificationAction(context, notificationId ?: "notification_$taskId", action)
     }
     
-    private fun handleMuteAction(context: Context, notificationId: Int) {
-        Log.d("NotificationAction", "Task muted for notification: $notificationId")
+    private fun handleMuteAction(context: Context, taskId: String, notificationId: String?) {
+        Log.d("NotificationAction", "Task muted: $taskId")
         
-        // Extract task ID from notification ID
-        val taskId = extractTaskIdFromNotificationId(notificationId)
-        
-        // TODO: Send mute to backend API
-        sendTaskMute(context, taskId)
+        // Send mute to backend API
+        sendNotificationAction(context, notificationId ?: "notification_$taskId", "mute")
     }
     
     // Helper methods
@@ -135,19 +132,45 @@ class NotificationActionReceiver : BroadcastReceiver() {
         return calendar.timeInMillis
     }
     
-    // Backend API calls (placeholder)
-    private fun sendTaskCompletion(context: Context, taskId: String) {
-        // TODO: Implement API call to backend
-        Log.d("NotificationAction", "Task completed: $taskId")
-    }
-    
-    private fun sendTaskSnooze(context: Context, taskId: String, duration: String) {
-        // TODO: Implement API call to backend
-        Log.d("NotificationAction", "Task snoozed: $taskId for $duration")
-    }
-    
-    private fun sendTaskMute(context: Context, taskId: String) {
-        // TODO: Implement API call to backend
-        Log.d("NotificationAction", "Task muted: $taskId")
+    // Backend API calls
+    private fun sendNotificationAction(context: Context, notificationId: String, action: String) {
+        // Use coroutine to make API call
+        kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO).launch {
+            try {
+                val url = java.net.URL("http://10.0.2.2:3000/api/push-notifications/action")
+                val connection = url.openConnection() as java.net.HttpURLConnection
+                
+                connection.requestMethod = "POST"
+                connection.setRequestProperty("Content-Type", "application/json")
+                connection.doOutput = true
+                
+                // Get auth token from shared preferences
+                val authToken = context.getSharedPreferences("auth_prefs", Context.MODE_PRIVATE)
+                    .getString("auth_token", null)
+                
+                if (authToken != null) {
+                    connection.setRequestProperty("Authorization", "Bearer $authToken")
+                }
+                
+                val jsonBody = org.json.JSONObject().apply {
+                    put("notification_id", notificationId)
+                    put("action", action)
+                }
+                
+                connection.outputStream.use { os ->
+                    os.write(jsonBody.toString().toByteArray())
+                }
+                
+                val responseCode = connection.responseCode
+                if (responseCode == java.net.HttpURLConnection.HTTP_OK) {
+                    Log.d("NotificationAction", "Action sent successfully: $action")
+                } else {
+                    Log.e("NotificationAction", "Failed to send action. Response code: $responseCode")
+                }
+                
+            } catch (e: Exception) {
+                Log.e("NotificationAction", "Error sending action to server", e)
+            }
+        }
     }
 }

@@ -213,9 +213,33 @@ export class NotificationService {
       metadata: notification.metadata
     });
 
-    // TODO: Integrate with actual push notification service (APNs/FCM)
-    // For now, we'll simulate scheduling
-    console.log(`Scheduling notification ${notification.id} for ${notification.scheduledTime}`);
+    // Send push notification immediately or schedule for later
+    if (notification.scheduledTime <= new Date()) {
+      // Send immediately
+      try {
+        const { PushNotificationService } = await import('./pushNotificationService');
+        const result = await PushNotificationService.sendNotificationToUser(
+          notification.userId,
+          notification
+        );
+        
+        if (result.successCount > 0) {
+          console.log(`Push notification sent successfully: ${notification.id}`);
+        } else {
+          console.log(`Push notification failed: ${notification.id}`, result.errors);
+          // Create retry record for failed notifications
+          const notificationHistory = await NotificationHistory.findByNotificationId(notification.id);
+          if (notificationHistory) {
+            await this.createNotificationRetry(notificationHistory.id);
+          }
+        }
+      } catch (error) {
+        console.error(`Error sending push notification ${notification.id}:`, error);
+      }
+    } else {
+      // Schedule for later (this would typically use a job queue in production)
+      console.log(`Scheduling notification ${notification.id} for ${notification.scheduledTime}`);
+    }
   }
 
   /**
@@ -717,21 +741,54 @@ export class NotificationService {
   }
 
   /**
-   * Attempt to deliver a notification (placeholder for actual push service integration)
+   * Attempt to deliver a notification using push notification service
    */
   private static async attemptNotificationDelivery(
     notificationHistory: NotificationHistory
   ): Promise<{ success: boolean; error?: string }> {
-    // TODO: Integrate with actual push notification service (APNs/FCM)
-    // For now, simulate delivery with random success/failure
-    const success = Math.random() > 0.3; // 70% success rate for simulation
-    
-    if (success) {
-      return { success: true };
-    } else {
+    try {
+      // Import push notification service
+      const { PushNotificationService } = await import('./pushNotificationService');
+      
+      // Create notification object from history
+      const notification: LocationNotification = {
+        id: notificationHistory.notificationId,
+        taskId: notificationHistory.taskId,
+        userId: notificationHistory.userId,
+        type: notificationHistory.type as NotificationType,
+        title: notificationHistory.title,
+        body: notificationHistory.body,
+        actions: this.STANDARD_ACTIONS.complete ? [
+          this.STANDARD_ACTIONS.complete,
+          this.STANDARD_ACTIONS.snooze_15m,
+          this.STANDARD_ACTIONS.mute
+        ] : [],
+        scheduledTime: notificationHistory.scheduledTime,
+        metadata: notificationHistory.metadata || {
+          geofenceId: '',
+          geofenceType: 'arrival',
+          location: { latitude: 0, longitude: 0 }
+        }
+      };
+      
+      // Send push notification
+      const result = await PushNotificationService.sendNotificationToUser(
+        notificationHistory.userId,
+        notification
+      );
+      
+      if (result.successCount > 0) {
+        return { success: true };
+      } else {
+        return { 
+          success: false, 
+          error: result.errors.join('; ') || 'Push notification delivery failed'
+        };
+      }
+    } catch (error) {
       return { 
         success: false, 
-        error: 'Simulated delivery failure' 
+        error: error instanceof Error ? error.message : 'Unknown error'
       };
     }
   }

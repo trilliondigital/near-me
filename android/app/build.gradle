@@ -1,6 +1,7 @@
 plugins {
     id 'com.android.application'
     id 'org.jetbrains.kotlin.android'
+    id 'com.google.gms.google-services'
 }
 
 android {
@@ -69,6 +70,11 @@ dependencies {
     
     // Permissions
     implementation 'com.google.accompanist:accompanist-permissions:0.32.0'
+    
+    // Firebase Cloud Messaging
+    implementation platform('com.google.firebase:firebase-bom:32.7.0')
+    implementation 'com.google.firebase:firebase-messaging-ktx'
+    implementation 'com.google.firebase:firebase-analytics-ktx'
     
     // Testing
     testImplementation 'junit:junit:4.13.2'

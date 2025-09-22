@@ -15,7 +15,9 @@ import notificationRoutes from './routes/notifications';
 import notificationPersistenceRoutes from './routes/notificationPersistence';
 import notificationManagerRoutes from './routes/notificationManager';
 import backgroundProcessorRoutes from './routes/backgroundProcessor';
+import pushNotificationRoutes from './routes/pushNotifications';
 import { BackgroundProcessor } from './services/backgroundProcessor';
+import { PushNotificationService } from './services/pushNotificationService';
 
 // Load environment variables
 dotenv.config();
@@ -47,6 +49,7 @@ app.use('/api/geofences', geofenceRoutes);
 app.use('/api/notifications', notificationRoutes);
 app.use('/api/notifications/persistence', notificationPersistenceRoutes);
 app.use('/api/notifications/manager', notificationManagerRoutes);
+app.use('/api/push-notifications', pushNotificationRoutes);
 app.use('/api/background', backgroundProcessorRoutes);
 
 // Error handling middleware
@@ -57,6 +60,25 @@ app.use(errorHandler);
 app.listen(PORT, () => {
   console.log(`🚀 Near Me API server running on port ${PORT}`);
   console.log(`📍 Environment: ${process.env.NODE_ENV || 'development'}`);
+  
+  // Initialize push notification service
+  PushNotificationService.initialize({
+    apns: process.env.APNS_KEY_ID ? {
+      teamId: process.env.APNS_TEAM_ID!,
+      keyId: process.env.APNS_KEY_ID!,
+      bundleId: process.env.APNS_BUNDLE_ID!,
+      privateKey: process.env.APNS_PRIVATE_KEY!,
+      environment: (process.env.APNS_ENVIRONMENT as 'development' | 'production') || 'development'
+    } : undefined,
+    fcm: process.env.FCM_PROJECT_ID ? {
+      projectId: process.env.FCM_PROJECT_ID!,
+      privateKey: process.env.FCM_PRIVATE_KEY!,
+      clientEmail: process.env.FCM_CLIENT_EMAIL!,
+      serverKey: process.env.FCM_SERVER_KEY
+    } : undefined,
+    useMockServices: process.env.NODE_ENV === 'development' && !process.env.USE_REAL_PUSH_SERVICES
+  });
+  console.log('📱 Push notification service initialized');
   
   // Start background processor for notification management
   if (process.env.NODE_ENV !== 'test') {

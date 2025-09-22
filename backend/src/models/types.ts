@@ -35,10 +35,16 @@ export interface UserPreferences {
 }
 
 export interface PushNotificationToken {
-  device_token: string;
+  id: string;
+  userId: string;
+  deviceToken: string;
   platform: 'ios' | 'android';
-  is_active: boolean;
-  last_updated: Date;
+  deviceId?: string;
+  appVersion?: string;
+  isActive: boolean;
+  createdAt: Date;
+  updatedAt: Date;
+  lastUsed?: Date;
 }
 
 // Database entity interfaces
