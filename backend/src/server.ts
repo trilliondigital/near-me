@@ -31,8 +31,10 @@ import subscriptionRoutes from './routes/subscriptions';
 import privacyRoutes from './routes/privacy';
 import performanceRoutes from './routes/performance';
 import analyticsRoutes from './routes/analytics';
+import dashboardRoutes from './routes/dashboard';
 import { BackgroundProcessor } from './services/backgroundProcessor';
 import { PushNotificationService } from './services/pushNotificationService';
+import { analyticsManager } from './services/analyticsManager';
 import { SubscriptionExpirationService } from './services/subscriptionExpirationService';
 
 // Load environment variables
@@ -86,6 +88,7 @@ app.use('/api/subscriptions', subscriptionRoutes);
 app.use('/api/privacy', privacyRoutes);
 app.use('/api/performance', performanceRoutes);
 app.use('/api/analytics', analyticsRoutes);
+app.use('/api/dashboard', dashboardRoutes);
 app.use('/api/background', backgroundProcessorRoutes);
 
 // Error handling middleware
@@ -115,6 +118,13 @@ app.listen(PORT, () => {
     useMockServices: process.env.NODE_ENV === 'development' && !process.env.USE_REAL_PUSH_SERVICES
   });
   console.log('📱 Push notification service initialized');
+  
+  // Initialize analytics manager
+  analyticsManager.initialize().then(() => {
+    console.log('📊 Analytics manager initialized');
+  }).catch(error => {
+    console.error('❌ Failed to initialize analytics manager:', error);
+  });
   
   // Start background processor for notification management
   if (process.env.NODE_ENV !== 'test') {

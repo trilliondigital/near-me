@@ -391,6 +391,76 @@ router.get('/conversion', authenticateToken, async (req, res) => {
   }
 });
 
+// GET /api/analytics/events/recent - Get recent events (admin only)
+router.get('/events/recent', authenticateToken, [
+  query('limit').optional().isInt({ min: 1, max: 100 }).withMessage('Limit must be between 1 and 100')
+], async (req, res) => {
+  try {
+    // TODO: Add admin role check
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({
+        success: false,
+        message: 'Validation failed',
+        errors: errors.array()
+      });
+    }
+
+    const limit = parseInt(req.query.limit as string) || 50;
+    const events = await analyticsService.getRecentEvents(limit);
+
+    res.json({
+      success: true,
+      data: events
+    });
+
+  } catch (error) {
+    logger.error('Failed to get recent events', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to get recent events'
+    });
+  }
+});
+
+// GET /api/analytics/health - Get system health metrics
+router.get('/health', authenticateToken, async (req, res) => {
+  try {
+    const health = await analyticsService.getSystemHealth();
+
+    res.json({
+      success: true,
+      data: health
+    });
+
+  } catch (error) {
+    logger.error('Failed to get system health', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to get system health'
+    });
+  }
+});
+
+// GET /api/analytics/alerts - Get active alerts
+router.get('/alerts', authenticateToken, async (req, res) => {
+  try {
+    const alerts = await analyticsService.getActiveAlerts();
+
+    res.json({
+      success: true,
+      data: alerts
+    });
+
+  } catch (error) {
+    logger.error('Failed to get alerts', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to get alerts'
+    });
+  }
+});
+
 // Business event tracking endpoints
 // POST /api/analytics/task-created
 router.post('/task-created', authenticateToken, [

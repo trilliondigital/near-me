@@ -777,6 +777,257 @@ class AnalyticsService extends EventEmitter {
     return str.replace(/[A-Z]/g, letter => `_${letter.toLowerCase()}`);
   }
 
+  // MARK: - Recent Events and Health Monitoring
+  async getRecentEvents(limit: number = 50): Promise<any[]> {
+    try {
+      const query = `
+        SELECT 
+          event_type,
+          platform,
+          app_version,
+          timestamp,
+          event_data
+        FROM user_events 
+        WHERE timestamp >= NOW() - INTERVAL '24 hours'
+        ORDER BY timestamp DESC 
+        LIMIT $1
+      `;
+      
+      const result = await db.query(query, [limit]);
+      return result.rows;
+    } catch (error) {
+      logger.error('Failed to get recent events', error);
+      throw error;
+    }
+  }
+
+  async getSystemHealth(): Promise<any> {
+    try {
+      const healthChecks = await Promise.all([
+        this.checkEventIngestionHealth(),
+        this.checkSessionHealth(),
+        this.checkDatabaseHealth(),
+        this.checkPerformanceMetrics()
+      ]);
+
+      const overallHealth = healthChecks.every(check => check.status === 'healthy') ? 'healthy' : 
+                           healthChecks.some(check => check.status === 'critical') ? 'critical' : 'warning';
+
+      return {
+        overall_status: overallHealth,
+        timestamp: new Date(),
+        checks: {
+          event_ingestion: healthChecks[0],
+          session_management: healthChecks[1],
+          database: healthChecks[2],
+          performance: healthChecks[3]
+        }
+      };
+    } catch (error) {
+      logger.error('Failed to get system health', error);
+      throw error;
+    }
+  }
+
+  private async checkEventIngestionHealth(): Promise<any> {
+    try {
+      const query = `
+        SELECT COUNT(*) as event_count
+        FROM user_events 
+        WHERE timestamp >= NOW() - INTERVAL '1 hour'
+      `;
+      
+      const result = await db.query(query);
+      const eventCount = parseInt(result.rows[0].event_count);
+      
+      return {
+        status: eventCount > 0 ? 'healthy' : 'warning',
+        metric: 'events_per_hour',
+        value: eventCount,
+        threshold: 1,
+        message: eventCount > 0 ? 'Event ingestion is active' : 'No events in the last hour'
+      };
+    } catch (error) {
+      return {
+        status: 'critical',
+        metric: 'events_per_hour',
+        value: 0,
+        error: error.message
+      };
+    }
+  }
+
+  private async checkSessionHealth(): Promise<any> {
+    try {
+      const query = `
+        SELECT COUNT(*) as active_sessions
+        FROM analytics_sessions 
+        WHERE session_start >= NOW() - INTERVAL '24 hours'
+        AND session_end IS NULL
+      `;
+      
+      const result = await db.query(query);
+      const activeSessions = parseInt(result.rows[0].active_sessions);
+      
+      return {
+        status: 'healthy',
+        metric: 'active_sessions',
+        value: activeSessions,
+        message: `${activeSessions} active sessions`
+      };
+    } catch (error) {
+      return {
+        status: 'critical',
+        metric: 'active_sessions',
+        value: 0,
+        error: error.message
+      };
+    }
+  }
+
+  private async checkDatabaseHealth(): Promise<any> {
+    try {
+      const query = `SELECT 1 as health_check`;
+      await db.query(query);
+      
+      return {
+        status: 'healthy',
+        metric: 'database_connection',
+        value: 1,
+        message: 'Database connection is healthy'
+      };
+    } catch (error) {
+      return {
+        status: 'critical',
+        metric: 'database_connection',
+        value: 0,
+        error: error.message
+      };
+    }
+  }
+
+  private async checkPerformanceMetrics(): Promise<any> {
+    try {
+      // Check average event processing time (simulated)
+      const avgProcessingTime = this.eventBuffer.length * 10; // ms
+      
+      return {
+        status: avgProcessingTime < 1000 ? 'healthy' : 'warning',
+        metric: 'avg_processing_time_ms',
+        value: avgProcessingTime,
+        threshold: 1000,
+        message: `Average processing time: ${avgProcessingTime}ms`
+      };
+    } catch (error) {
+      return {
+        status: 'critical',
+        metric: 'avg_processing_time_ms',
+        value: 0,
+        error: error.message
+      };
+    }
+  }
+
+  async getActiveAlerts(): Promise<any[]> {
+    try {
+      const alerts = [];
+      const health = await this.getSystemHealth();
+      
+      // Check for critical health issues
+      Object.entries(health.checks).forEach(([checkName, check]: [string, any]) => {
+        if (check.status === 'critical') {
+          alerts.push({
+            id: `health_${checkName}`,
+            type: 'critical',
+            title: `${checkName.replace('_', ' ').toUpperCase()} Health Issue`,
+            message: check.error || check.message,
+            timestamp: new Date(),
+            resolved: false
+          });
+        } else if (check.status === 'warning') {
+          alerts.push({
+            id: `health_${checkName}`,
+            type: 'warning',
+            title: `${checkName.replace('_', ' ').toUpperCase()} Warning`,
+            message: check.message,
+            timestamp: new Date(),
+            resolved: false
+          });
+        }
+      });
+
+      // Check for business metric alerts
+      const businessAlerts = await this.checkBusinessMetricAlerts();
+      alerts.push(...businessAlerts);
+
+      return alerts;
+    } catch (error) {
+      logger.error('Failed to get active alerts', error);
+      throw error;
+    }
+  }
+
+  private async checkBusinessMetricAlerts(): Promise<any[]> {
+    try {
+      const alerts = [];
+      
+      // Check conversion rate drop
+      const conversionData = await this.getConversionFunnel();
+      if (conversionData && conversionData.length > 0) {
+        const conversion = conversionData[0];
+        
+        if (conversion.premium_conversion_rate < 5) {
+          alerts.push({
+            id: 'low_conversion_rate',
+            type: 'warning',
+            title: 'Low Premium Conversion Rate',
+            message: `Premium conversion rate is ${conversion.premium_conversion_rate}%, below 5% threshold`,
+            timestamp: new Date(),
+            resolved: false
+          });
+        }
+        
+        if (conversion.onboarding_completion_rate < 70) {
+          alerts.push({
+            id: 'low_onboarding_completion',
+            type: 'warning',
+            title: 'Low Onboarding Completion',
+            message: `Onboarding completion rate is ${conversion.onboarding_completion_rate}%, below 70% threshold`,
+            timestamp: new Date(),
+            resolved: false
+          });
+        }
+      }
+
+      // Check daily active users trend
+      const dailyMetrics = await this.getDailyMetrics(
+        new Date(Date.now() - 7 * 24 * 60 * 60 * 1000),
+        new Date()
+      );
+      
+      if (dailyMetrics && dailyMetrics.length >= 2) {
+        const today = dailyMetrics[0];
+        const yesterday = dailyMetrics[1];
+        
+        if (today.daily_active_users < yesterday.daily_active_users * 0.8) {
+          alerts.push({
+            id: 'dau_drop',
+            type: 'warning',
+            title: 'Significant DAU Drop',
+            message: `Daily active users dropped by ${((yesterday.daily_active_users - today.daily_active_users) / yesterday.daily_active_users * 100).toFixed(1)}%`,
+            timestamp: new Date(),
+            resolved: false
+          });
+        }
+      }
+
+      return alerts;
+    } catch (error) {
+      logger.error('Failed to check business metric alerts', error);
+      return [];
+    }
+  }
+
   // MARK: - Configuration
   updateConfiguration(newConfig: Partial<AnalyticsConfig>): void {
     this.config = { ...this.config, ...newConfig };
