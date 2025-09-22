@@ -24,7 +24,7 @@ struct MainAppView: View {
     @EnvironmentObject var onboardingManager: OnboardingManager
     
     var body: some View {
-        TaskListView()
+        TaskDashboardView()
             .environmentObject(locationManager)
             .environmentObject(notificationManager)
     }

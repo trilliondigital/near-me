@@ -3,23 +3,12 @@ import CoreLocation
 
 struct TaskCreationView: View {
     @Environment(\.presentationMode) var presentationMode
-    @StateObject private var taskService = TaskService.shared
+    @StateObject private var viewModel = TaskCreationViewModel()
+    @StateObject private var workflowCoordinator = TaskWorkflowCoordinator.shared
     @StateObject private var locationManager = LocationManager()
     
-    // Form state
-    @State private var title = ""
-    @State private var description = ""
-    @State private var locationType: LocationType = .customPlace
-    @State private var selectedPlace: Place?
-    @State private var selectedPOICategory: POICategory = .gas
-    @State private var customRadii = GeofenceRadii.default
-    @State private var showingLocationSelection = false
-    @State private var showingPOISelection = false
-    @State private var showingRadiusCustomization = false
-    
-    // UI state
-    @State private var isCreating = false
-    @State private var showingError = false
+    @State private var showingSuccessToast = false
+    @State private var showingWorkflowProgress = false
     
     var body: some View {
         NavigationView {
@@ -38,64 +27,41 @@ struct TaskCreationView: View {
                     .padding(.top, DesignSystem.Spacing.lg)
                     
                     // Task Details Section
-                    VStack(alignment: .leading, spacing: DesignSystem.Spacing.md) {
-                        SectionHeader(title: "Task Details", icon: "checkmark.circle.fill")
-                        
+                    FormSection(title: "Task Details", icon: "checkmark.circle.fill") {
                         VStack(spacing: DesignSystem.Spacing.md) {
-                            // Title Field
-                            VStack(alignment: .leading, spacing: DesignSystem.Spacing.xs) {
-                                Text("Title")
-                                    .font(DesignSystem.Typography.bodyEmphasized)
-                                    .foregroundColor(DesignSystem.Colors.textPrimary)
-                                
-                                TextField("Enter task title", text: $title)
-                                    .textFieldStyle(CustomTextFieldStyle())
-                            }
+                            ValidatedTextField(
+                                title: "Title",
+                                placeholder: "Enter task title",
+                                text: $viewModel.title,
+                                isRequired: true,
+                                validation: TaskFormValidation.validateTitle
+                            )
                             
-                            // Description Field
-                            VStack(alignment: .leading, spacing: DesignSystem.Spacing.xs) {
-                                Text("Description (Optional)")
-                                    .font(DesignSystem.Typography.bodyEmphasized)
-                                    .foregroundColor(DesignSystem.Colors.textPrimary)
-                                
-                                TextField("Enter task description", text: $description, axis: .vertical)
-                                    .textFieldStyle(CustomTextFieldStyle())
-                                    .lineLimit(3...6)
-                            }
+                            ValidatedTextField(
+                                title: "Description (Optional)",
+                                placeholder: "Enter task description",
+                                text: $viewModel.description,
+                                validation: TaskFormValidation.validateDescription
+                            )
                         }
                     }
                     .padding(.horizontal, DesignSystem.Spacing.padding)
                     
                     // Location Selection Section
-                    VStack(alignment: .leading, spacing: DesignSystem.Spacing.md) {
-                        SectionHeader(title: "Location", icon: "location.fill")
-                        
+                    FormSection(title: "Location", icon: "location.fill") {
                         VStack(spacing: DesignSystem.Spacing.md) {
-                            // Location Type Selection
-                            VStack(alignment: .leading, spacing: DesignSystem.Spacing.sm) {
-                                Text("Location Type")
-                                    .font(DesignSystem.Typography.bodyEmphasized)
-                                    .foregroundColor(DesignSystem.Colors.textPrimary)
-                                
-                                Picker("Location Type", selection: $locationType) {
-                                    ForEach(LocationType.allCases, id: \.self) { type in
-                                        Text(type.displayName)
-                                            .tag(type)
-                                    }
-                                }
-                                .pickerStyle(SegmentedPickerStyle())
-                            }
+                            LocationTypePicker(selectedType: $viewModel.locationType)
                             
                             // Location Selection based on type
-                            if locationType == .customPlace {
+                            if viewModel.locationType == .customPlace {
                                 CustomPlaceSelectionView(
-                                    selectedPlace: $selectedPlace,
-                                    showingLocationSelection: $showingLocationSelection
+                                    selectedPlace: $viewModel.selectedPlace,
+                                    showingLocationSelection: $viewModel.showingLocationSelection
                                 )
                             } else {
                                 POICategorySelectionView(
-                                    selectedCategory: $selectedPOICategory,
-                                    showingPOISelection: $showingPOISelection
+                                    selectedCategory: $viewModel.selectedPOICategory,
+                                    showingPOISelection: $viewModel.showingPOISelection
                                 )
                             }
                         }
@@ -103,21 +69,19 @@ struct TaskCreationView: View {
                     .padding(.horizontal, DesignSystem.Spacing.padding)
                     
                     // Geofence Settings Section
-                    VStack(alignment: .leading, spacing: DesignSystem.Spacing.md) {
-                        SectionHeader(title: "Reminder Settings", icon: "bell.fill")
-                        
+                    FormSection(title: "Reminder Settings", icon: "bell.fill") {
                         VStack(spacing: DesignSystem.Spacing.md) {
                             // Current Settings Display
                             GeofenceSettingsDisplayView(
-                                locationType: locationType,
-                                selectedPlace: selectedPlace,
-                                selectedPOICategory: selectedPOICategory,
-                                customRadii: customRadii
+                                locationType: viewModel.locationType,
+                                selectedPlace: viewModel.selectedPlace,
+                                selectedPOICategory: viewModel.selectedPOICategory,
+                                customRadii: viewModel.customRadii
                             )
                             
                             // Customize Button
                             Button(action: {
-                                showingRadiusCustomization = true
+                                viewModel.showingRadiusCustomization = true
                             }) {
                                 HStack {
                                     Image(systemName: "slider.horizontal.3")
@@ -142,29 +106,55 @@ struct TaskCreationView: View {
                     BottomActionBar()
                 }
             )
-        }
-        .sheet(isPresented: $showingLocationSelection) {
-            LocationSelectionView(selectedPlace: $selectedPlace)
-        }
-        .sheet(isPresented: $showingPOISelection) {
-            POISelectionView(selectedCategory: $selectedPOICategory)
-        }
-        .sheet(isPresented: $showingRadiusCustomization) {
-            RadiusCustomizationView(
-                customRadii: $customRadii,
-                locationType: locationType,
-                selectedPOICategory: selectedPOICategory
+            .overlay(
+                // Loading Overlay
+                LoadingOverlay(
+                    isLoading: workflowCoordinator.workflowState.isProcessing,
+                    message: workflowCoordinator.workflowMessage
+                )
+            )
+            .overlay(
+                // Success Toast
+                VStack {
+                    ToastMessage(
+                        message: "Task created successfully!",
+                        type: .success,
+                        isShowing: showingSuccessToast
+                    )
+                    .padding(.top, 50)
+                    
+                    Spacer()
+                }
             )
         }
-        .alert("Error", isPresented: $showingError) {
+        .sheet(isPresented: $viewModel.showingLocationSelection) {
+            LocationSelectionView(selectedPlace: $viewModel.selectedPlace)
+        }
+        .sheet(isPresented: $viewModel.showingPOISelection) {
+            POISelectionView(selectedCategory: $viewModel.selectedPOICategory)
+        }
+        .sheet(isPresented: $viewModel.showingRadiusCustomization) {
+            RadiusCustomizationView(
+                customRadii: $viewModel.customRadii,
+                locationType: viewModel.locationType,
+                selectedPOICategory: viewModel.selectedPOICategory
+            )
+        }
+        .alert("Error", isPresented: $viewModel.showingError) {
             Button("OK") {
-                taskService.clearError()
+                viewModel.showingError = false
             }
         } message: {
-            Text(taskService.error?.localizedDescription ?? "Unknown error occurred")
+            Text(viewModel.errorMessage)
         }
-        .onChange(of: taskService.error) { error in
-            showingError = error != nil
+        .onChange(of: workflowCoordinator.workflowState) { state in
+            if state.isCompleted {
+                showingSuccessToast = true
+                DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) {
+                    showingSuccessToast = false
+                    presentationMode.wrappedValue.dismiss()
+                }
+            }
         }
     }
     
@@ -194,25 +184,25 @@ struct TaskCreationView: View {
                 // Create Button
                 Button(action: createTask) {
                     HStack {
-                        if isCreating {
+                        if viewModel.isCreating || workflowCoordinator.workflowState.isProcessing {
                             ProgressView()
                                 .progressViewStyle(CircularProgressViewStyle(tint: .white))
                                 .scaleEffect(0.8)
                         } else {
                             Image(systemName: "plus.circle.fill")
                         }
-                        Text(isCreating ? "Creating..." : "Create Task")
+                        Text(buttonTitle)
                     }
                     .font(DesignSystem.Typography.buttonMedium)
                     .foregroundColor(.white)
                     .frame(maxWidth: .infinity)
                     .frame(height: 50)
-                    .background(canCreateTask ? DesignSystem.Colors.primary : DesignSystem.Colors.textTertiary)
+                    .background(viewModel.canCreateTask ? DesignSystem.Colors.primary : DesignSystem.Colors.textTertiary)
                     .designSystemCornerRadius()
                     .designSystemShadow(DesignSystem.Shadow.small)
                 }
                 .buttonStyle(PlainButtonStyle())
-                .disabled(!canCreateTask || isCreating)
+                .disabled(!viewModel.canCreateTask || viewModel.isCreating || workflowCoordinator.workflowState.isProcessing)
             }
             .padding(.horizontal, DesignSystem.Spacing.padding)
             .padding(.vertical, DesignSystem.Spacing.md)
@@ -220,37 +210,31 @@ struct TaskCreationView: View {
         }
     }
     
-    // MARK: - Validation
-    private var canCreateTask: Bool {
-        !title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty &&
-        ((locationType == .customPlace && selectedPlace != nil) ||
-         (locationType == .poiCategory))
+    // MARK: - Computed Properties
+    private var buttonTitle: String {
+        if workflowCoordinator.workflowState.isProcessing {
+            return workflowCoordinator.workflowMessage
+        } else if viewModel.isCreating {
+            return "Creating..."
+        } else {
+            return "Create Task"
+        }
     }
     
     // MARK: - Actions
     private func createTask() {
-        guard canCreateTask else { return }
-        
-        isCreating = true
+        guard viewModel.canCreateTask else { return }
         
         let request = CreateTaskRequest(
-            title: title.trimmingCharacters(in: .whitespacesAndNewlines),
-            description: description.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? nil : description.trimmingCharacters(in: .whitespacesAndNewlines),
-            locationType: locationType,
-            placeId: selectedPlace?.id,
-            poiCategory: locationType == .poiCategory ? selectedPOICategory : nil,
-            customRadii: customRadii
+            title: viewModel.title.trimmingCharacters(in: .whitespacesAndNewlines),
+            description: viewModel.description.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? nil : viewModel.description.trimmingCharacters(in: .whitespacesAndNewlines),
+            locationType: viewModel.locationType,
+            placeId: viewModel.selectedPlace?.id,
+            poiCategory: viewModel.locationType == .poiCategory ? viewModel.selectedPOICategory : nil,
+            customRadii: viewModel.customRadii
         )
         
-        taskService.createTask(request)
-        
-        // Handle completion
-        DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
-            isCreating = false
-            if taskService.error == nil {
-                presentationMode.wrappedValue.dismiss()
-            }
-        }
+        workflowCoordinator.startTaskCreationWorkflow(request: request)
     }
 }
 
