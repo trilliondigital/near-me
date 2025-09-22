@@ -1,5 +1,6 @@
 import { Task } from '../models/Task';
 import { User } from '../models/User';
+import { GeofenceService } from './geofenceService';
 import { 
   CreateTaskRequest, 
   UpdateTaskRequest, 
@@ -39,8 +40,10 @@ export class TaskService {
     // Create the task
     const task = await Task.create(userId, data);
 
-    // TODO: In future tasks, this will trigger geofence creation
-    // await GeofenceService.createGeofencesForTask(task);
+    // Create geofences for the task if it's active
+    if (task.status === 'active') {
+      await GeofenceService.createGeofencesForTask(task);
+    }
 
     return task;
   }
@@ -120,10 +123,15 @@ export class TaskService {
 
     const updatedTask = await task.update(data);
 
-    // TODO: In future tasks, this will update geofences if location changed
-    // if (locationChanged) {
-    //   await GeofenceService.updateGeofencesForTask(updatedTask);
-    // }
+    // Update geofences if location-related data changed
+    const locationChanged = data.location_type !== undefined || 
+                           data.place_id !== undefined || 
+                           data.poi_category !== undefined || 
+                           data.custom_radii !== undefined;
+
+    if (locationChanged) {
+      await GeofenceService.updateGeofencesForTask(updatedTask);
+    }
 
     return updatedTask;
   }
@@ -139,8 +147,8 @@ export class TaskService {
 
     const completedTask = await task.complete();
 
-    // TODO: In future tasks, this will remove geofences
-    // await GeofenceService.removeGeofencesForTask(taskId);
+    // Remove geofences when task is completed
+    await GeofenceService.removeGeofencesForTask(taskId);
 
     return completedTask;
   }
@@ -156,8 +164,8 @@ export class TaskService {
 
     const mutedTask = await task.mute();
 
-    // TODO: In future tasks, this will disable notifications but keep geofences
-    // await NotificationService.muteTaskNotifications(taskId);
+    // Deactivate geofences when task is muted (but don't delete them)
+    await GeofenceService.deactivateGeofencesForTask(taskId);
 
     return mutedTask;
   }
@@ -173,9 +181,8 @@ export class TaskService {
 
     const reactivatedTask = await task.reactivate();
 
-    // TODO: In future tasks, this will re-enable notifications and geofences
-    // await GeofenceService.createGeofencesForTask(reactivatedTask);
-    // await NotificationService.enableTaskNotifications(taskId);
+    // Reactivate geofences when task is reactivated
+    await GeofenceService.reactivateGeofencesForTask(taskId);
 
     return reactivatedTask;
   }
@@ -189,9 +196,8 @@ export class TaskService {
       throw new ValidationError('Task not found', []);
     }
 
-    // TODO: In future tasks, this will remove geofences and notifications
-    // await GeofenceService.removeGeofencesForTask(taskId);
-    // await NotificationService.removeTaskNotifications(taskId);
+    // Remove geofences when task is deleted
+    await GeofenceService.removeGeofencesForTask(taskId);
 
     await task.delete();
   }

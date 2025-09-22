@@ -225,3 +225,49 @@ export function validatePOI(data: any) {
 export function validateEvent(data: any) {
   return createEventSchema.validate(data);
 }
+
+// Simple validation helper functions for individual fields
+export function validateRequired(fieldName: string, value: any): string[] {
+  const errors: string[] = [];
+  if (value === undefined || value === null || value === '') {
+    errors.push(`${fieldName} is required`);
+  }
+  return errors;
+}
+
+export function validateNumber(fieldName: string, value: any, options?: { min?: number; max?: number }): string[] {
+  const errors: string[] = [];
+  
+  if (value === undefined || value === null) {
+    return errors; // Let validateRequired handle this
+  }
+  
+  if (typeof value !== 'number' || isNaN(value)) {
+    errors.push(`${fieldName} must be a valid number`);
+    return errors;
+  }
+  
+  if (options?.min !== undefined && value < options.min) {
+    errors.push(`${fieldName} must be at least ${options.min}`);
+  }
+  
+  if (options?.max !== undefined && value > options.max) {
+    errors.push(`${fieldName} must be at most ${options.max}`);
+  }
+  
+  return errors;
+}
+
+export function validateEnum(fieldName: string, value: any, validValues: string[]): string[] {
+  const errors: string[] = [];
+  
+  if (value === undefined || value === null) {
+    return errors; // Let validateRequired handle this
+  }
+  
+  if (!validValues.includes(value)) {
+    errors.push(`${fieldName} must be one of: ${validValues.join(', ')}`);
+  }
+  
+  return errors;
+}

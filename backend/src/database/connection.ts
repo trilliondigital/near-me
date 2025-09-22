@@ -3,6 +3,9 @@ import { createClient, RedisClientType } from 'redis';
 
 // PostgreSQL connection pool
 let pool: Pool | null = null;
+
+// Export pool for testing purposes
+export { pool };
 let redisClient: RedisClientType | null = null;
 
 export interface DatabaseConfig {

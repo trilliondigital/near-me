@@ -1,5 +1,6 @@
 import { PlaceEntity, CreatePlaceRequest, UpdatePlaceRequest, GeofenceRadii, PlaceType } from './types';
-import { validatePlace, validateUpdatePlace } from './validation';
+import { validatePlace, validateUpdatePlace, ValidationError } from './validation';
+import { getDatabase } from '../database/connection';
 
 export class Place {
   public id: string;
@@ -120,5 +121,97 @@ export class Place {
 
   private toRadians(degrees: number): number {
     return degrees * (Math.PI / 180);
+  }
+
+  /**
+   * Find place by ID and user ID
+   */
+  static async findById(id: string, userId?: string): Promise<Place | null> {
+    let query = 'SELECT * FROM places WHERE id = $1';
+    const params = [id];
+    
+    if (userId) {
+      query += ' AND user_id = $2';
+      params.push(userId);
+    }
+    
+    const result = await getDatabase().query(query, params);
+    
+    if (result.rows.length === 0) {
+      return null;
+    }
+
+    return new Place(result.rows[0]);
+  }
+
+  /**
+   * Find all places for a user
+   */
+  static async findByUserId(userId: string): Promise<Place[]> {
+    const query = 'SELECT * FROM places WHERE user_id = $1 ORDER BY created_at DESC';
+    const result = await getDatabase().query(query, [userId]);
+    
+    return result.rows.map(row => new Place(row));
+  }
+
+  /**
+   * Create a new place
+   */
+  static async create(userId: string, data: CreatePlaceRequest): Promise<Place> {
+    const placeData = Place.fromCreateRequest(userId, data);
+    
+    const query = `
+      INSERT INTO places (user_id, name, latitude, longitude, address, place_type, default_radii)
+      VALUES ($1, $2, $3, $4, $5, $6, $7)
+      RETURNING *
+    `;
+
+    const values = [
+      placeData.user_id,
+      placeData.name,
+      placeData.latitude,
+      placeData.longitude,
+      placeData.address,
+      placeData.place_type,
+      JSON.stringify(placeData.default_radii)
+    ];
+
+    const result = await getDatabase().query(query, values);
+    return new Place(result.rows[0]);
+  }
+
+  /**
+   * Update a place
+   */
+  async update(data: UpdatePlaceRequest): Promise<Place> {
+    const updates = Place.fromUpdateRequest(data);
+    
+    if (Object.keys(updates).length === 0) {
+      return this;
+    }
+
+    const setClause = Object.keys(updates)
+      .map((key, index) => `${key} = $${index + 2}`)
+      .join(', ');
+    
+    const query = `
+      UPDATE places 
+      SET ${setClause}, updated_at = NOW()
+      WHERE id = $1
+      RETURNING *
+    `;
+
+    const values = [this.id, ...Object.values(updates)];
+    const result = await getDatabase().query(query, values);
+    
+    return new Place(result.rows[0]);
+  }
+
+  /**
+   * Delete a place
+   */
+  async delete(): Promise<void> {
+    const query = 'DELETE FROM places WHERE id = $1';
+    await getDatabase().query(query, [this.id]);
   }
 }
