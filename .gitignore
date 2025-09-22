@@ -1,4 +1,9 @@
-# Xcode
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# iOS / Xcode
 *.xcodeproj/*
 !*.xcodeproj/project.pbxproj
 !*.xcodeproj/xcshareddata/
@@ -42,8 +47,78 @@ fastlane/test_output
 # Code Injection
 iOSInjectionProject/
 
-# macOS
-.DS_Store
+# Android
+android/.gradle/
+android/build/
+android/app/build/
+android/local.properties
+android/.idea/
+android/*.iml
+android/.externalNativeBuild/
+android/.cxx/
+android/captures/
+android/app/release/
+
+# Node.js / Backend
+backend/node_modules/
+backend/dist/
+backend/coverage/
+backend/logs/
+backend/.env
+backend/.env.local
+backend/.env.production
+backend/npm-debug.log*
+backend/yarn-debug.log*
+backend/yarn-error.log*
+
+# Database
+database/postgres_data/
+database/redis_data/
+
+# IDE
+.vscode/settings.json
+.idea/
+*.swp
+*.swo
+*~
+
+# Logs
+logs/
+*.log
+
+# Runtime data
+pids/
+*.pid
+*.seed
+*.pid.lock
+
+# Coverage directory used by tools like istanbul
+coverage/
+*.lcov
+
+# nyc test coverage
+.nyc_output
+
+# Dependency directories
+node_modules/
+
+# Optional npm cache directory
+.npm
+
+# Optional REPL history
+.node_repl_history
+
+# Output of 'npm pack'
+*.tgz
+
+# Yarn Integrity file
+.yarn-integrity
+
+# dotenv environment variables file
+.env
+.env.test
+.env.production
+.env.local
 
 # Kiro
 .kiro/cache/

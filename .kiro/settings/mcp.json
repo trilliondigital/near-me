@@ -2,16 +2,30 @@
   "mcpServers": {
     "filesystem": {
       "command": "npx",
-      "args": ["-y", "@modelcontextprotocol/server-filesystem", "/Users/kaeganbraud/Desktop/Near Me"],
+      "args": [
+        "-y",
+        "@modelcontextprotocol/server-filesystem",
+        "/Users/kaeganbraud/Desktop/Near Me"
+      ],
       "disabled": false,
-      "autoApprove": ["read_file", "list_directory"],
+      "autoApprove": [
+        "read_file",
+        "list_directory",
+        "create_directory"
+      ],
       "disabledTools": []
     },
     "git": {
-      "command": "npx", 
-      "args": ["-y", "@modelcontextprotocol/server-git"],
+      "command": "npx",
+      "args": [
+        "-y",
+        "@modelcontextprotocol/server-git"
+      ],
       "disabled": true,
-      "autoApprove": ["git_status", "git_log"],
+      "autoApprove": [
+        "git_status",
+        "git_log"
+      ],
       "disabledTools": []
     }
   }
