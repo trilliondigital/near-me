@@ -1,5 +1,6 @@
 package com.nearme.app.ui.theme
 
+import androidx.compose.animation.core.tween
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
@@ -47,6 +48,10 @@ object DesignSystem {
         const val fast = 200L
         const val medium = 300L
         const val slow = 500L
+        
+        val fastTween = tween<Float>(fast.toInt())
+        val mediumTween = tween<Float>(medium.toInt())
+        val slowTween = tween<Float>(slow.toInt())
     }
     
     // Button Heights
@@ -70,5 +75,12 @@ object DesignSystem {
         val buttonLarge = 18.sp
         val buttonMedium = 16.sp
         val buttonSmall = 14.sp
+    }
+    
+    // Map Constants
+    object Map {
+        val defaultZoom = 15f
+        val markerSize = 32.dp
+        val controlButtonSize = 40.dp
     }
 }

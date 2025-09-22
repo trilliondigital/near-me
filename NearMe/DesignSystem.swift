@@ -12,19 +12,12 @@ struct DesignSystem {
         
         // Secondary Colors
         static let secondary = Color("Secondary")
-        static let secondaryLight = Color("SecondaryLight")
-        static let secondaryDark = Color("SecondaryDark")
-        
-        // Accent Colors
         static let accent = Color("Accent")
-        static let accentLight = Color("AccentLight")
-        static let accentDark = Color("AccentDark")
         
         // Semantic Colors
         static let success = Color("Success")
         static let warning = Color("Warning")
         static let error = Color("Error")
-        static let info = Color("Info")
         
         // Neutral Colors
         static let background = Color("Background")
@@ -34,18 +27,24 @@ struct DesignSystem {
         // Text Colors
         static let textPrimary = Color("TextPrimary")
         static let textSecondary = Color("TextSecondary")
-        static let textTertiary = Color("TextTertiary")
-        static let textInverse = Color("TextInverse")
+        static let textTertiary = Color.gray.opacity(0.6)
+        static let textInverse = Color.white
         
         // Border Colors
-        static let border = Color("Border")
-        static let borderLight = Color("BorderLight")
-        static let borderDark = Color("BorderDark")
+        static let border = Color.gray.opacity(0.2)
+        static let borderLight = Color.gray.opacity(0.1)
+        static let borderDark = Color.gray.opacity(0.3)
         
         // Overlay Colors
         static let overlay = Color.black.opacity(0.5)
         static let overlayLight = Color.black.opacity(0.1)
         static let overlayDark = Color.black.opacity(0.8)
+        
+        // Map Colors
+        static let mapPin = Color("Primary")
+        static let mapPinSelected = Color("Accent")
+        static let geofenceStroke = Color("Primary").opacity(0.3)
+        static let geofenceFill = Color("Primary").opacity(0.1)
     }
     
     // MARK: - Typography

@@ -69,47 +69,107 @@ struct MainTabView: View {
     @StateObject private var navigationCoordinator = NavigationCoordinator()
     @EnvironmentObject var locationManager: LocationManager
     @EnvironmentObject var notificationManager: NotificationManager
+    @StateObject private var taskService = TaskService.shared
     
     var body: some View {
         TabView(selection: $navigationCoordinator.currentTab) {
-            TasksView()
-                .tabItem {
+            NavigationStack(path: $navigationCoordinator.navigationPath) {
+                TasksView()
+                    .navigationDestination(for: NavigationDestination.self) { destination in
+                        destinationView(for: destination)
+                    }
+            }
+            .tabItem {
+                ZStack {
                     Image(systemName: navigationCoordinator.currentTab == .tasks ? 
                           NavigationCoordinator.MainTab.tasks.selectedIcon : 
                           NavigationCoordinator.MainTab.tasks.icon)
-                    Text(NavigationCoordinator.MainTab.tasks.rawValue)
+                    
+                    TabBarBadge(count: taskService.activeTasks.count)
                 }
-                .tag(NavigationCoordinator.MainTab.tasks)
+                Text(NavigationCoordinator.MainTab.tasks.rawValue)
+            }
+            .tag(NavigationCoordinator.MainTab.tasks)
             
-            PlacesView()
-                .tabItem {
-                    Image(systemName: navigationCoordinator.currentTab == .places ? 
-                          NavigationCoordinator.MainTab.places.selectedIcon : 
-                          NavigationCoordinator.MainTab.places.icon)
-                    Text(NavigationCoordinator.MainTab.places.rawValue)
-                }
-                .tag(NavigationCoordinator.MainTab.places)
+            NavigationStack(path: $navigationCoordinator.navigationPath) {
+                PlacesView()
+                    .navigationDestination(for: NavigationDestination.self) { destination in
+                        destinationView(for: destination)
+                    }
+            }
+            .tabItem {
+                Image(systemName: navigationCoordinator.currentTab == .places ? 
+                      NavigationCoordinator.MainTab.places.selectedIcon : 
+                      NavigationCoordinator.MainTab.places.icon)
+                Text(NavigationCoordinator.MainTab.places.rawValue)
+            }
+            .tag(NavigationCoordinator.MainTab.places)
             
-            NotificationsView()
-                .tabItem {
+            NavigationStack(path: $navigationCoordinator.navigationPath) {
+                NotificationsView()
+                    .navigationDestination(for: NavigationDestination.self) { destination in
+                        destinationView(for: destination)
+                    }
+            }
+            .tabItem {
+                ZStack {
                     Image(systemName: navigationCoordinator.currentTab == .notifications ? 
                           NavigationCoordinator.MainTab.notifications.selectedIcon : 
                           NavigationCoordinator.MainTab.notifications.icon)
-                    Text(NavigationCoordinator.MainTab.notifications.rawValue)
+                    
+                    TabBarBadge(count: notificationManager.unreadCount)
                 }
-                .tag(NavigationCoordinator.MainTab.notifications)
+                Text(NavigationCoordinator.MainTab.notifications.rawValue)
+            }
+            .tag(NavigationCoordinator.MainTab.notifications)
             
-            SettingsView()
-                .tabItem {
-                    Image(systemName: navigationCoordinator.currentTab == .settings ? 
-                          NavigationCoordinator.MainTab.settings.selectedIcon : 
-                          NavigationCoordinator.MainTab.settings.icon)
-                    Text(NavigationCoordinator.MainTab.settings.rawValue)
-                }
-                .tag(NavigationCoordinator.MainTab.settings)
+            NavigationStack(path: $navigationCoordinator.navigationPath) {
+                SettingsView()
+                    .navigationDestination(for: NavigationDestination.self) { destination in
+                        destinationView(for: destination)
+                    }
+            }
+            .tabItem {
+                Image(systemName: navigationCoordinator.currentTab == .settings ? 
+                      NavigationCoordinator.MainTab.settings.selectedIcon : 
+                      NavigationCoordinator.MainTab.settings.icon)
+                Text(NavigationCoordinator.MainTab.settings.rawValue)
+            }
+            .tag(NavigationCoordinator.MainTab.settings)
         }
         .accentColor(DesignSystem.Colors.primary)
         .environmentObject(navigationCoordinator)
+        .onAppear {
+            taskService.fetchTasks()
+        }
+    }
+    
+    @ViewBuilder
+    private func destinationView(for destination: NavigationDestination) -> some View {
+        switch destination {
+        case .createTask:
+            TaskCreationView()
+        case .editTask(let taskId):
+            TaskEditView(taskId: taskId)
+        case .taskDetail(let taskId):
+            TaskDetailView(taskId: taskId)
+        case .createPlace:
+            PlaceCreationView()
+        case .editPlace(let placeId):
+            PlaceEditView(placeId: placeId)
+        case .placeDetail(let placeId):
+            PlaceDetailView(placeId: placeId)
+        case .notificationDetail(let notificationId):
+            NotificationDetailView(notificationId: notificationId)
+        case .settings:
+            SettingsView()
+        case .about:
+            AboutView()
+        case .privacy:
+            PrivacyView()
+        case .terms:
+            TermsView()
+        }
     }
 }
 
@@ -198,6 +258,89 @@ struct NavigationWrapper<Content: View>: View {
             }
             .navigationBarHidden(true)
         }
+    }
+}
+
+// MARK: - Enhanced Navigation Components
+struct ModalNavigationBar: View {
+    let title: String
+    let onDismiss: () -> Void
+    var trailingButton: (() -> AnyView)?
+    
+    var body: some View {
+        HStack {
+            Button("Cancel") {
+                onDismiss()
+            }
+            .font(DesignSystem.Typography.body)
+            .foregroundColor(DesignSystem.Colors.primary)
+            
+            Spacer()
+            
+            Text(title)
+                .font(DesignSystem.Typography.title3)
+                .fontWeight(.semibold)
+                .foregroundColor(DesignSystem.Colors.textPrimary)
+            
+            Spacer()
+            
+            if let trailingButton = trailingButton {
+                trailingButton()
+            } else {
+                Color.clear
+                    .frame(width: 60, height: 20)
+            }
+        }
+        .padding(.horizontal, DesignSystem.Spacing.md)
+        .padding(.vertical, DesignSystem.Spacing.sm)
+        .background(DesignSystem.Colors.surface)
+    }
+}
+
+struct TabBarBadge: View {
+    let count: Int
+    
+    var body: some View {
+        if count > 0 {
+            Text("\(min(count, 99))")
+                .font(.system(size: 12, weight: .semibold))
+                .foregroundColor(.white)
+                .frame(minWidth: 16, minHeight: 16)
+                .background(
+                    Circle()
+                        .fill(DesignSystem.Colors.error)
+                )
+                .offset(x: 8, y: -8)
+        }
+    }
+}
+
+struct NavigationProgressBar: View {
+    let currentStep: Int
+    let totalSteps: Int
+    
+    var body: some View {
+        VStack(spacing: DesignSystem.Spacing.sm) {
+            HStack {
+                ForEach(0..<totalSteps, id: \.self) { step in
+                    Circle()
+                        .fill(step < currentStep ? DesignSystem.Colors.primary : DesignSystem.Colors.border)
+                        .frame(width: 8, height: 8)
+                    
+                    if step < totalSteps - 1 {
+                        Rectangle()
+                            .fill(step < currentStep - 1 ? DesignSystem.Colors.primary : DesignSystem.Colors.border)
+                            .frame(height: 2)
+                    }
+                }
+            }
+            
+            Text("Step \(currentStep) of \(totalSteps)")
+                .font(DesignSystem.Typography.caption1)
+                .foregroundColor(DesignSystem.Colors.textSecondary)
+        }
+        .padding(.horizontal, DesignSystem.Spacing.padding)
+        .padding(.vertical, DesignSystem.Spacing.sm)
     }
 }
 
