@@ -78,7 +78,7 @@
   - Write tests using location mocking and instrumentation tests
   - _Requirements: 4.1, 4.2, 4.3, 4.4, 8.3, 8.4_
 
-- [-] 9. Build cross-platform geofence event processing
+- [x] 9. Build cross-platform geofence event processing
   - Create geofence event API endpoints for client-server synchronization
   - Implement on-device geofence evaluation logic for privacy
   - Build event queuing system for offline scenarios
@@ -89,7 +89,7 @@
 
 ## Phase 4: Notification System
 
-- [ ] 10. Implement core notification system
+- [-] 10. Implement core notification system
   - Create notification templates for approach, arrival, and post-arrival scenarios
   - Build notification scheduling and delivery system
   - Implement notification actions (Complete, Snooze, Open Map, Mute)

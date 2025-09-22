@@ -123,6 +123,16 @@ export const createEventSchema = Joi.object({
   session_id: Joi.string().max(255).optional()
 });
 
+// Geofence Event validation schemas
+export const createGeofenceEventSchema = Joi.object({
+  user_id: Joi.string().uuid().required(),
+  task_id: Joi.string().uuid().required(),
+  geofence_id: Joi.string().uuid().required(),
+  event_type: Joi.string().valid('enter', 'exit', 'dwell').required(),
+  location: coordinateSchema.required(),
+  confidence: Joi.number().min(0).max(1).default(1.0)
+});
+
 // Query parameter validation schemas
 export const paginationSchema = Joi.object({
   page: Joi.number().integer().min(1).default(1),

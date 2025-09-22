@@ -75,6 +75,24 @@ CREATE TABLE events (
     timestamp TIMESTAMPTZ DEFAULT NOW()
 );
 
+-- Geofence Events table for event processing
+CREATE TABLE geofence_events (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    user_id UUID REFERENCES users(id) ON DELETE CASCADE,
+    task_id UUID REFERENCES tasks(id) ON DELETE CASCADE,
+    geofence_id UUID REFERENCES geofences(id) ON DELETE CASCADE,
+    event_type TEXT NOT NULL CHECK (event_type IN ('enter', 'exit', 'dwell')),
+    latitude DECIMAL(10, 8) NOT NULL,
+    longitude DECIMAL(11, 8) NOT NULL,
+    confidence DECIMAL(3, 2) DEFAULT 1.0 CHECK (confidence >= 0 AND confidence <= 1),
+    status TEXT DEFAULT 'pending' CHECK (status IN ('pending', 'processed', 'failed', 'duplicate', 'cooldown')),
+    processed_at TIMESTAMPTZ,
+    notification_sent BOOLEAN DEFAULT false,
+    bundled_with UUID REFERENCES geofence_events(id),
+    cooldown_until TIMESTAMPTZ,
+    created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
 -- Create indexes for better performance
 CREATE INDEX idx_user_tasks ON tasks(user_id, status);
 CREATE INDEX idx_active_tasks ON tasks(status) WHERE status = 'active';
@@ -87,6 +105,10 @@ CREATE INDEX idx_poi_category ON pois(category);
 CREATE INDEX idx_poi_verified ON pois(verified);
 CREATE INDEX idx_events_user_time ON events(user_id, timestamp);
 CREATE INDEX idx_events_type_time ON events(event_type, timestamp);
+CREATE INDEX idx_geofence_events_user ON geofence_events(user_id, created_at);
+CREATE INDEX idx_geofence_events_task ON geofence_events(task_id, created_at);
+CREATE INDEX idx_geofence_events_status ON geofence_events(status) WHERE status = 'pending';
+CREATE INDEX idx_geofence_events_cooldown ON geofence_events(cooldown_until) WHERE cooldown_until IS NOT NULL;
 
 -- Create updated_at trigger function
 CREATE OR REPLACE FUNCTION update_updated_at_column()

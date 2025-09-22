@@ -235,14 +235,194 @@ router.delete('/task/:taskId', async (req: AuthenticatedRequest, res: Response, 
  */
 router.post('/events', async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
   try {
-    // This endpoint will be implemented in later tasks when we build
-    // the notification system and geofence event processing
-    res.status(501).json({
-      error: {
-        code: 'NOT_IMPLEMENTED',
-        message: 'Geofence event processing will be implemented in Phase 3',
-        timestamp: new Date().toISOString()
+    const userId = req.user!.id;
+    const { events } = req.body;
+
+    if (!events || !Array.isArray(events)) {
+      throw new ValidationError('Events array is required', []);
+    }
+
+    // Import services
+    const { GeofenceEventProcessor } = await import('../services/geofenceEventProcessor');
+    const { EventQueueService } = await import('../services/eventQueueService');
+
+    // Add user_id to each event
+    const eventsWithUserId = events.map(event => ({
+      ...event,
+      user_id: userId
+    }));
+
+    // Try to process events immediately, queue failures for retry
+    const results = [];
+    const queuedEvents = [];
+
+    for (const eventData of eventsWithUserId) {
+      try {
+        const result = await GeofenceEventProcessor.processEvent(eventData);
+        results.push(result);
+      } catch (error) {
+        // Queue for retry if immediate processing fails
+        const eventId = await EventQueueService.enqueueEvent(eventData);
+        queuedEvents.push({ 
+          eventId, 
+          error: error instanceof Error ? error.message : 'Unknown error' 
+        });
       }
+    }
+
+    res.json({
+      success: true,
+      data: {
+        processed: results.length,
+        queued: queuedEvents.length,
+        results: results.map(r => ({
+          eventId: r.event.id,
+          shouldNotify: r.shouldNotify,
+          reason: r.reason,
+          bundledWith: r.bundledWith
+        })),
+        queuedEvents
+      },
+      timestamp: new Date().toISOString()
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+/**
+ * POST /api/geofences/events/sync
+ * Sync offline events from mobile clients
+ */
+router.post('/events/sync', async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
+  try {
+    const userId = req.user!.id;
+    const { events } = req.body;
+
+    if (!events || !Array.isArray(events)) {
+      throw new ValidationError('Events array is required', []);
+    }
+
+    const { EventQueueService } = await import('../services/eventQueueService');
+
+    // Add user_id to each event
+    const eventsWithUserId = events.map(event => ({
+      ...event,
+      user_id: userId
+    }));
+
+    const syncResult = await EventQueueService.syncOfflineEvents(userId, eventsWithUserId);
+
+    res.json({
+      success: true,
+      data: syncResult,
+      message: `Synced ${events.length} offline events`,
+      timestamp: new Date().toISOString()
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+/**
+ * GET /api/geofences/events/queue
+ * Get queued events for the authenticated user
+ */
+router.get('/events/queue', async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
+  try {
+    const userId = req.user!.id;
+    const { EventQueueService } = await import('../services/eventQueueService');
+
+    const queuedEvents = EventQueueService.getQueuedEventsForUser(userId);
+    const queueStats = EventQueueService.getQueueStats();
+
+    res.json({
+      success: true,
+      data: {
+        events: queuedEvents,
+        stats: queueStats
+      },
+      timestamp: new Date().toISOString()
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+/**
+ * GET /api/geofences/events/stats
+ * Get event processing statistics
+ */
+router.get('/events/stats', async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
+  try {
+    const userId = req.user!.id;
+    const days = parseInt(req.query.days as string) || 7;
+
+    const { GeofenceEventProcessor } = await import('../services/geofenceEventProcessor');
+    const stats = await GeofenceEventProcessor.getProcessingStats(userId, days);
+
+    res.json({
+      success: true,
+      data: stats,
+      timestamp: new Date().toISOString()
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+/**
+ * POST /api/geofences/events/retry/:eventId
+ * Retry a failed queued event
+ */
+router.post('/events/retry/:eventId', async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
+  try {
+    const eventId = req.params.eventId;
+    const { EventQueueService } = await import('../services/eventQueueService');
+
+    const success = await EventQueueService.retryEvent(eventId);
+
+    if (!success) {
+      throw new ValidationError('Event not found in queue or currently processing', []);
+    }
+
+    res.json({
+      success: true,
+      message: 'Event retry initiated',
+      timestamp: new Date().toISOString()
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+/**
+ * GET /api/geofences/events/history
+ * Get event history for the authenticated user
+ */
+router.get('/events/history', async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
+  try {
+    const userId = req.user!.id;
+    const limit = parseInt(req.query.limit as string) || 50;
+    const offset = parseInt(req.query.offset as string) || 0;
+    const status = req.query.status as any;
+
+    const { GeofenceEvent } = await import('../models/GeofenceEvent');
+    const events = await GeofenceEvent.findByUserId(userId, {
+      status,
+      limit,
+      offset
+    });
+
+    res.json({
+      success: true,
+      data: events.map(e => e.toJSON()),
+      pagination: {
+        limit,
+        offset,
+        total: events.length
+      },
+      timestamp: new Date().toISOString()
     });
   } catch (error) {
     next(error);

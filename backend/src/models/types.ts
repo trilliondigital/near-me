@@ -22,6 +22,8 @@ export type TaskStatus = 'active' | 'completed' | 'muted';
 export type PlaceType = 'home' | 'work' | 'custom';
 export type LocationType = 'custom_place' | 'poi_category';
 export type GeofenceType = 'approach_5mi' | 'approach_3mi' | 'approach_1mi' | 'arrival' | 'post_arrival';
+export type GeofenceEventType = 'enter' | 'exit' | 'dwell';
+export type GeofenceEventStatus = 'pending' | 'processed' | 'failed' | 'duplicate' | 'cooldown';
 export type NotificationStyle = 'minimal' | 'standard' | 'detailed';
 export type PrivacyMode = 'standard' | 'foreground_only';
 
@@ -104,6 +106,23 @@ export interface EventEntity {
   timestamp: Date;
 }
 
+export interface GeofenceEventEntity {
+  id: string;
+  user_id: string;
+  task_id: string;
+  geofence_id: string;
+  event_type: GeofenceEventType;
+  latitude: number;
+  longitude: number;
+  confidence: number;
+  status: GeofenceEventStatus;
+  processed_at?: Date;
+  notification_sent: boolean;
+  bundled_with?: string;
+  cooldown_until?: Date;
+  created_at: Date;
+}
+
 // Request/Response DTOs
 export interface CreateUserRequest {
   device_id: string;
@@ -178,4 +197,13 @@ export interface CreateEventRequest {
   event_type: string;
   event_data?: Record<string, any>;
   session_id?: string;
+}
+
+export interface CreateGeofenceEventRequest {
+  user_id: string;
+  task_id: string;
+  geofence_id: string;
+  event_type: GeofenceEventType;
+  location: Coordinate;
+  confidence?: number;
 }
