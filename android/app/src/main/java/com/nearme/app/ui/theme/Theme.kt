@@ -16,15 +16,59 @@ import androidx.compose.ui.platform.LocalView
 import androidx.core.view.WindowCompat
 
 private val DarkColorScheme = darkColorScheme(
-    primary = Purple80,
-    secondary = PurpleGrey80,
-    tertiary = Pink80
+    primary = PrimaryLight,
+    onPrimary = TextInverse,
+    primaryContainer = PrimaryDark,
+    onPrimaryContainer = TextInverse,
+    secondary = SecondaryLight,
+    onSecondary = TextInverse,
+    secondaryContainer = SecondaryDark,
+    onSecondaryContainer = TextInverse,
+    tertiary = AccentLight,
+    onTertiary = TextInverse,
+    tertiaryContainer = AccentDark,
+    onTertiaryContainer = TextInverse,
+    error = Error,
+    onError = TextInverse,
+    errorContainer = Error.copy(alpha = 0.1f),
+    onErrorContainer = Error,
+    background = DarkBackground,
+    onBackground = DarkTextPrimary,
+    surface = DarkSurface,
+    onSurface = DarkTextPrimary,
+    surfaceVariant = DarkCard,
+    onSurfaceVariant = DarkTextSecondary,
+    outline = DarkBorder,
+    outlineVariant = DarkBorder.copy(alpha = 0.5f),
+    scrim = Color.Black.copy(alpha = 0.5f)
 )
 
 private val LightColorScheme = lightColorScheme(
-    primary = Purple40,
-    secondary = PurpleGrey40,
-    tertiary = Pink40
+    primary = Primary,
+    onPrimary = TextInverse,
+    primaryContainer = PrimaryLight,
+    onPrimaryContainer = TextInverse,
+    secondary = Secondary,
+    onSecondary = TextInverse,
+    secondaryContainer = SecondaryLight,
+    onSecondaryContainer = TextInverse,
+    tertiary = Accent,
+    onTertiary = TextInverse,
+    tertiaryContainer = AccentLight,
+    onTertiaryContainer = TextInverse,
+    error = Error,
+    onError = TextInverse,
+    errorContainer = Error.copy(alpha = 0.1f),
+    onErrorContainer = Error,
+    background = Background,
+    onBackground = TextPrimary,
+    surface = Surface,
+    onSurface = TextPrimary,
+    surfaceVariant = Card,
+    onSurfaceVariant = TextSecondary,
+    outline = Border,
+    outlineVariant = BorderLight,
+    scrim = Color.Black.copy(alpha = 0.5f)
 )
 
 @Composable

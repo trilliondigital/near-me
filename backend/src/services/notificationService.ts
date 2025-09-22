@@ -3,6 +3,10 @@ import { Task } from '../models/Task';
 import { User } from '../models/User';
 import { Place } from '../models/Place';
 import { Geofence } from '../models/Geofence';
+import { NotificationHistory } from '../models/NotificationHistory';
+import { NotificationSnooze } from '../models/NotificationSnooze';
+import { TaskMute } from '../models/TaskMute';
+import { NotificationRetry } from '../models/NotificationRetry';
 import { 
   GeofenceType, 
   POICategory, 
@@ -176,12 +180,38 @@ export class NotificationService {
       throw new ValidationError('User not found', []);
     }
 
+    // Check if task is muted
+    const isTaskMuted = await TaskMute.isTaskMuted(notification.taskId);
+    if (isTaskMuted) {
+      console.log(`Task ${notification.taskId} is muted, skipping notification`);
+      return;
+    }
+
+    // Check if notification is snoozed
+    const isSnoozed = await NotificationSnooze.isNotificationSnoozed(notification.id);
+    if (isSnoozed) {
+      console.log(`Notification ${notification.id} is snoozed, skipping delivery`);
+      return;
+    }
+
     const shouldRespectQuietHours = this.respectQuietHours(notification, user.preferences.quietHours);
     if (!shouldRespectQuietHours) {
       // Queue notification for after quiet hours
       const nextDeliveryTime = this.calculateNextDeliveryTime(user.preferences.quietHours);
       notification.scheduledTime = nextDeliveryTime;
     }
+
+    // Create notification history record
+    await NotificationHistory.create({
+      userId: notification.userId,
+      taskId: notification.taskId,
+      notificationId: notification.id,
+      type: notification.type,
+      title: notification.title,
+      body: notification.body,
+      scheduledTime: notification.scheduledTime,
+      metadata: notification.metadata
+    });
 
     // TODO: Integrate with actual push notification service (APNs/FCM)
     // For now, we'll simulate scheduling
@@ -192,6 +222,18 @@ export class NotificationService {
    * Cancel scheduled notification
    */
   static async cancelNotification(notificationId: string): Promise<void> {
+    // Find notification history record
+    const notificationHistory = await NotificationHistory.findByNotificationId(notificationId);
+    if (notificationHistory) {
+      await notificationHistory.cancel();
+    }
+
+    // Cancel any active snoozes
+    const snooze = await NotificationSnooze.findByNotificationId(notificationId);
+    if (snooze) {
+      await snooze.cancel();
+    }
+
     // TODO: Integrate with actual push notification service
     console.log(`Cancelling notification ${notificationId}`);
   }
@@ -520,10 +562,31 @@ export class NotificationService {
     userId: string, 
     snoozeType: 'snooze_15m' | 'snooze_1h' | 'snooze_today'
   ): Promise<void> {
-    // TODO: Implement snooze functionality
-    // This would involve storing snooze state and preventing notifications
-    // until the snooze period expires
-    console.log(`Snoozing task ${taskId} for ${snoozeType}`);
+    // Convert action type to duration
+    const snoozeDuration: SnoozeDuration = snoozeType.replace('snooze_', '') as SnoozeDuration;
+    
+    // Find the notification history record
+    const notificationHistory = await NotificationHistory.findByNotificationId(
+      `notification_${taskId}`
+    );
+    
+    if (!notificationHistory) {
+      throw new ValidationError('Notification not found', []);
+    }
+
+    // Mark notification as snoozed
+    await notificationHistory.markSnoozed();
+
+    // Create snooze record
+    await NotificationSnooze.create({
+      userId,
+      taskId,
+      notificationId: notificationHistory.notificationId,
+      snoozeDuration,
+      originalScheduledTime: notificationHistory.scheduledTime
+    });
+
+    console.log(`Snoozed task ${taskId} for ${snoozeDuration}`);
   }
 
   /**
@@ -544,6 +607,171 @@ export class NotificationService {
       throw new ValidationError('Task not found', []);
     }
 
+    // Create task mute record (default to 24h mute)
+    await TaskMute.create({
+      userId,
+      taskId,
+      muteDuration: '24h',
+      reason: 'User muted via notification action'
+    });
+
+    // Also mark the task as muted in the task model
     await task.mute();
+  }
+
+  /**
+   * Process expired snoozes and reschedule notifications
+   */
+  static async processExpiredSnoozes(): Promise<void> {
+    const expiredSnoozes = await NotificationSnooze.findExpiredSnoozes();
+    
+    for (const snooze of expiredSnoozes) {
+      try {
+        // Mark snooze as expired
+        await snooze.markExpired();
+        
+        // Find the original notification history
+        const notificationHistory = await NotificationHistory.findByNotificationId(
+          snooze.notificationId
+        );
+        
+        if (notificationHistory) {
+          // Reschedule the notification for immediate delivery
+          await notificationHistory.update({
+            status: 'pending',
+            scheduledTime: new Date()
+          });
+          
+          console.log(`Rescheduled notification ${snooze.notificationId} after snooze expired`);
+        }
+      } catch (error) {
+        console.error(`Error processing expired snooze ${snooze.id}:`, error);
+      }
+    }
+  }
+
+  /**
+   * Process expired task mutes
+   */
+  static async processExpiredMutes(): Promise<void> {
+    const expiredMutes = await TaskMute.findExpiredMutes();
+    
+    for (const mute of expiredMutes) {
+      try {
+        // Mark mute as expired
+        await mute.markExpired();
+        
+        // Find the task and unmute it
+        const task = await Task.findById(mute.taskId, mute.userId);
+        if (task) {
+          await task.unmute();
+          console.log(`Unmuted task ${mute.taskId} after mute expired`);
+        }
+      } catch (error) {
+        console.error(`Error processing expired mute ${mute.id}:`, error);
+      }
+    }
+  }
+
+  /**
+   * Process notification retries
+   */
+  static async processNotificationRetries(): Promise<void> {
+    const pendingRetries = await NotificationRetry.findPendingRetries();
+    
+    for (const retry of pendingRetries) {
+      try {
+        // Mark retry as retrying
+        await retry.markRetrying();
+        
+        // Find the notification history
+        const notificationHistory = await NotificationHistory.findById(retry.notificationHistoryId);
+        if (!notificationHistory) {
+          await retry.markFailed('Notification history not found');
+          continue;
+        }
+        
+        // Attempt to deliver the notification
+        const deliveryResult = await this.attemptNotificationDelivery(notificationHistory);
+        
+        if (deliveryResult.success) {
+          await notificationHistory.markDelivered();
+          await retry.markSucceeded();
+          console.log(`Successfully delivered notification ${notificationHistory.notificationId} on retry`);
+        } else {
+          // Schedule next retry if we haven't exceeded max attempts
+          if (retry.canRetry()) {
+            await retry.scheduleNextRetry();
+            console.log(`Scheduled retry ${retry.retryCount + 1} for notification ${notificationHistory.notificationId}`);
+          } else {
+            await notificationHistory.markFailed(deliveryResult.error || 'Max retries exceeded');
+            await retry.markFailed('Max retries exceeded');
+            console.log(`Failed to deliver notification ${notificationHistory.notificationId} after max retries`);
+          }
+        }
+      } catch (error) {
+        console.error(`Error processing retry ${retry.id}:`, error);
+        await retry.markFailed(error instanceof Error ? error.message : 'Unknown error');
+      }
+    }
+  }
+
+  /**
+   * Attempt to deliver a notification (placeholder for actual push service integration)
+   */
+  private static async attemptNotificationDelivery(
+    notificationHistory: NotificationHistory
+  ): Promise<{ success: boolean; error?: string }> {
+    // TODO: Integrate with actual push notification service (APNs/FCM)
+    // For now, simulate delivery with random success/failure
+    const success = Math.random() > 0.3; // 70% success rate for simulation
+    
+    if (success) {
+      return { success: true };
+    } else {
+      return { 
+        success: false, 
+        error: 'Simulated delivery failure' 
+      };
+    }
+  }
+
+  /**
+   * Create retry record for failed notification
+   */
+  static async createNotificationRetry(
+    notificationHistoryId: string,
+    maxRetries: number = 3
+  ): Promise<NotificationRetry> {
+    return NotificationRetry.create({
+      notificationHistoryId,
+      maxRetries
+    });
+  }
+
+  /**
+   * Get notification history for a user
+   */
+  static async getUserNotificationHistory(
+    userId: string,
+    page: number = 1,
+    limit: number = 20,
+    status?: string
+  ): Promise<{ notifications: NotificationHistory[], total: number }> {
+    return NotificationHistory.findByUserId(userId, page, limit, status);
+  }
+
+  /**
+   * Get active snoozes for a user
+   */
+  static async getUserActiveSnoozes(userId: string): Promise<NotificationSnooze[]> {
+    return NotificationSnooze.findActiveByUserId(userId);
+  }
+
+  /**
+   * Get active mutes for a user
+   */
+  static async getUserActiveMutes(userId: string): Promise<TaskMute[]> {
+    return TaskMute.findActiveByUserId(userId);
   }
 }

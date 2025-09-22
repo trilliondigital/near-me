@@ -1,6 +1,7 @@
 import { Router, Request, Response } from 'express';
 import Joi from 'joi';
 import { AuthService } from '../services/authService';
+import { User } from '../models/User';
 import { ValidationError } from '../models/validation';
 import { authenticateToken } from '../middleware/auth';
 
@@ -17,6 +18,11 @@ const emailAssociationSchema = Joi.object({
 
 const refreshTokenSchema = Joi.object({
   refresh_token: Joi.string().required()
+});
+
+const deviceTokenSchema = Joi.object({
+  device_token: Joi.string().min(1).required(),
+  platform: Joi.string().valid('ios', 'android').required()
 });
 
 /**
@@ -169,6 +175,62 @@ router.post('/refresh', async (req: Request, res: Response): Promise<void> => {
       error: {
         code: 'INTERNAL_ERROR',
         message: 'Token refresh failed',
+        timestamp: new Date().toISOString()
+      }
+    });
+  }
+});
+
+/**
+ * POST /auth/device-token
+ * Register or update device push notification token
+ */
+router.post('/device-token', authenticateToken, async (req: Request, res: Response) => {
+  try {
+    const { error, value } = deviceTokenSchema.validate(req.body);
+    if (error) {
+      res.status(400).json({
+        error: {
+          code: 'INVALID_REQUEST',
+          message: error.details.map(d => d.message).join(', '),
+          timestamp: new Date().toISOString()
+        }
+      });
+      return;
+    }
+
+    const { device_token, platform } = value;
+    const userId = (req as any).user.id;
+
+    // Update user's push token
+    await User.updatePushToken(userId, device_token, platform);
+
+    res.status(200).json({
+      data: {
+        message: 'Device token registered successfully',
+        platform,
+        registered_at: new Date().toISOString()
+      },
+      timestamp: new Date().toISOString()
+    });
+  } catch (error) {
+    console.error('Device token registration error:', error);
+    
+    if (error instanceof ValidationError) {
+      res.status(400).json({
+        error: {
+          code: 'VALIDATION_ERROR',
+          message: error.message,
+          timestamp: new Date().toISOString()
+        }
+      });
+      return;
+    }
+
+    res.status(500).json({
+      error: {
+        code: 'INTERNAL_ERROR',
+        message: 'Device token registration failed',
         timestamp: new Date().toISOString()
       }
     });

@@ -11,6 +11,7 @@ import { placeRoutes } from './routes/places';
 import { poiRoutes } from './routes/poi';
 import { geofenceRoutes } from './routes/geofences';
 import { healthRoutes } from './routes/health';
+import notificationPersistenceRoutes from './routes/notificationPersistence';
 
 // Load environment variables
 dotenv.config();
@@ -39,6 +40,7 @@ app.use('/api/tasks', taskRoutes);
 app.use('/api/places', placeRoutes);
 app.use('/api/poi', poiRoutes);
 app.use('/api/geofences', geofenceRoutes);
+app.use('/api/notifications', notificationPersistenceRoutes);
 
 // Error handling middleware
 app.use(notFoundHandler);

@@ -57,6 +57,7 @@
 	<array>
 		<string>location</string>
 		<string>background-app-refresh</string>
+		<string>remote-notification</string>
 	</array>
 </dict>
 </plist>

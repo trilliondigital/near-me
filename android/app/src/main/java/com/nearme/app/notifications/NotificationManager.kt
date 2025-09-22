@@ -133,6 +133,26 @@ class NotificationManager(application: Application) : AndroidViewModel(applicati
     fun cancelNotification(id: Int) {
         NotificationManagerCompat.from(context).cancel(id)
     }
+    
+    fun createStandardNotificationActions(): List<NotificationAction> {
+        return listOf(
+            NotificationAction("COMPLETE", "Complete"),
+            NotificationAction("SNOOZE_15M", "Snooze 15m"),
+            NotificationAction("SNOOZE_1H", "Snooze 1h"),
+            NotificationAction("SNOOZE_TODAY", "Snooze Today"),
+            NotificationAction("MUTE", "Mute")
+        )
+    }
+    
+    fun showNotification(
+        id: Int,
+        title: String,
+        body: String,
+        actions: List<NotificationAction> = createStandardNotificationActions(),
+        taskId: String? = null
+    ) {
+        showLocationNotification(id, title, body, actions)
+    }
 }
 
 data class NotificationAction(

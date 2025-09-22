@@ -4,7 +4,8 @@ import {
   CreateUserRequest, 
   UpdateUserRequest, 
   UserPreferences,
-  PremiumStatus 
+  PremiumStatus,
+  PushNotificationToken 
 } from './types';
 import { validateSchema, createUserSchema, updateUserSchema, ValidationError } from './validation';
 // import { v4 as uuidv4 } from 'uuid'; // Not used in this file
@@ -15,6 +16,7 @@ export class User {
   public email?: string;
   public preferences: UserPreferences;
   public premium_status: PremiumStatus;
+  public push_token?: PushNotificationToken;
   public created_at: Date;
   public updated_at: Date;
 
@@ -24,6 +26,7 @@ export class User {
     this.email = entity.email;
     this.preferences = entity.preferences;
     this.premium_status = entity.premium_status;
+    this.push_token = entity.push_token;
     this.created_at = entity.created_at;
     this.updated_at = entity.updated_at;
   }
@@ -256,5 +259,43 @@ export class User {
     const total = parseInt(countResult.rows[0].count, 10);
 
     return { users, total };
+  }
+
+  /**
+   * Update push notification token for user
+   */
+  static async updatePushToken(userId: string, deviceToken: string, platform: 'ios' | 'android'): Promise<void> {
+    const pushToken: PushNotificationToken = {
+      device_token: deviceToken,
+      platform,
+      is_active: true,
+      last_updated: new Date()
+    };
+
+    await query(
+      'UPDATE users SET push_token = $1, updated_at = NOW() WHERE id = $2',
+      [JSON.stringify(pushToken), userId]
+    );
+  }
+
+  /**
+   * Get users with active push tokens
+   */
+  static async findUsersWithPushTokens(): Promise<User[]> {
+    const result = await query<UserEntity>(
+      'SELECT * FROM users WHERE push_token IS NOT NULL AND (push_token->>\'is_active\')::boolean = true'
+    );
+
+    return result.rows.map(row => new User(row));
+  }
+
+  /**
+   * Deactivate push token for user
+   */
+  static async deactivatePushToken(userId: string): Promise<void> {
+    await query(
+      'UPDATE users SET push_token = jsonb_set(push_token, \'{is_active}\', \'false\'), updated_at = NOW() WHERE id = $1',
+      [userId]
+    );
   }
 }

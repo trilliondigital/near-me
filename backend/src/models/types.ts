@@ -34,6 +34,13 @@ export interface UserPreferences {
   privacyMode: PrivacyMode;
 }
 
+export interface PushNotificationToken {
+  device_token: string;
+  platform: 'ios' | 'android';
+  is_active: boolean;
+  last_updated: Date;
+}
+
 // Database entity interfaces
 export interface UserEntity {
   id: string;
@@ -41,6 +48,7 @@ export interface UserEntity {
   email?: string;
   preferences: UserPreferences;
   premium_status: PremiumStatus;
+  push_token?: PushNotificationToken;
   created_at: Date;
   updated_at: Date;
 }

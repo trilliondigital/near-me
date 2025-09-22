@@ -3,35 +3,30 @@ import SwiftUI
 struct ContentView: View {
     @EnvironmentObject var locationManager: LocationManager
     @EnvironmentObject var notificationManager: NotificationManager
+    @StateObject private var onboardingManager = OnboardingManager()
     
     var body: some View {
-        NavigationView {
-            VStack(spacing: 20) {
-                Text("Near Me")
-                    .font(.largeTitle)
-                    .fontWeight(.bold)
-                
-                Text("Location-aware reminders")
-                    .font(.subheadline)
-                    .foregroundColor(.secondary)
-                
-                Spacer()
-                
-                // Placeholder for main content
-                VStack(spacing: 16) {
-                    Text("Welcome to Near Me")
-                        .font(.title2)
-                    
-                    Text("Get reminded when you're near the right places")
-                        .multilineTextAlignment(.center)
-                        .foregroundColor(.secondary)
-                }
-                
-                Spacer()
+        Group {
+            if onboardingManager.isOnboardingComplete {
+                MainAppView()
+            } else {
+                OnboardingContainer(onboardingManager: onboardingManager)
             }
-            .padding()
-            .navigationBarHidden(true)
         }
+        .environmentObject(onboardingManager)
+    }
+}
+
+// MARK: - Main App View
+struct MainAppView: View {
+    @EnvironmentObject var locationManager: LocationManager
+    @EnvironmentObject var notificationManager: NotificationManager
+    @EnvironmentObject var onboardingManager: OnboardingManager
+    
+    var body: some View {
+        TaskListView()
+            .environmentObject(locationManager)
+            .environmentObject(notificationManager)
     }
 }
 

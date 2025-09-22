@@ -2,6 +2,7 @@ import { LocationNotification, NotificationBundle } from './notificationService'
 import { User } from '../models/User';
 import { TimeRange } from '../models/types';
 import { ValidationError } from '../models/validation';
+import { MockAPNsService } from './apnsService';
 
 export interface ScheduledNotification {
   id: string;
@@ -378,24 +379,59 @@ export class NotificationScheduler {
   }
 
   /**
-   * Send push notification (mock implementation)
+   * Send push notification via APNs
    */
   private static async sendPushNotification(
     notification: LocationNotification | NotificationBundle
   ): Promise<{ success: boolean; error?: string }> {
-    // This would integrate with APNs/FCM
-    // For now, simulate successful delivery
-    console.log(`Delivering notification: ${notification.title}`);
-    
-    // Simulate occasional failures for testing
-    if (Math.random() < 0.05) { // 5% failure rate
+    try {
+      // Get user's push token
+      const user = await User.findById(notification.userId);
+      if (!user || !user.push_token || !user.push_token.is_active) {
+        return {
+          success: false,
+          error: 'User has no active push token'
+        };
+      }
+
+      // Create APNs payload
+      const payload = {
+        aps: {
+          alert: {
+            title: notification.title,
+            body: notification.body
+          },
+          sound: 'default',
+          category: 'LOCATION_REMINDER'
+        },
+        task_id: notification.taskId,
+        notification_id: notification.id,
+        action_type: notification.type
+      };
+
+      // Send via APNs (using mock service for now)
+      const result = await MockAPNsService.sendNotification(
+        user.push_token.device_token,
+        payload
+      );
+
+      if (result.success) {
+        console.log(`Notification delivered successfully: ${notification.id}`);
+        return { success: true };
+      } else {
+        console.error(`Notification delivery failed: ${result.error}`);
+        return {
+          success: false,
+          error: result.error || 'Unknown APNs error'
+        };
+      }
+    } catch (error) {
+      console.error('Error sending push notification:', error);
       return {
         success: false,
-        error: 'Push service temporarily unavailable'
+        error: error instanceof Error ? error.message : 'Unknown error'
       };
     }
-
-    return { success: true };
   }
 
   /**
