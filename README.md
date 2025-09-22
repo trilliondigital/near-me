@@ -126,6 +126,27 @@ Notes:
 
 This project is currently in active development. See the [task list](.kiro/specs/near-me-v1/tasks.md) for implementation progress.
 
+## Release
+
+- Store listings templates: `Near Me Documents/Release/AppStore_Listing_Template.md`, `Near Me Documents/Release/PlayStore_Listing_Template.md`
+- Staged rollout plan: `Near Me Documents/Release/Rollout_Plan.md`
+- Support & FAQ: `Near Me Documents/Release/Support_and_FAQ.md`
+- Launch validation checklist: `Near Me Documents/Release/Launch_Validation_Checklist.md`
+- Privacy policy draft: `Near Me Documents/Release/Privacy_Policy_Draft.md`
+- Monitoring dashboard: `backend/src/dashboard/` (includes Launch KPIs)
+
+### Android (Release build)
+
+- Update `versionCode`/`versionName` in `android/app/build.gradle`
+- Generate AAB: `cd android && ./gradlew bundleRelease`
+- Upload to Play Console and start staged rollout per the rollout plan
+
+### iOS (App Store)
+
+- Update `MARKETING_VERSION`/`CURRENT_PROJECT_VERSION` in `NearMe.xcodeproj`
+- Archive and upload via Xcode Organizer
+- Configure App Store Connect listing and in-app purchases
+
 ## License
 
 MIT License - see LICENSE file for details.

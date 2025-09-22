@@ -148,7 +148,8 @@ class AnalyticsDashboard {
                 this.loadConversionFunnel(),
                 this.loadRecentEvents(),
                 this.loadSlaSummary(),
-                this.loadSlaTimeseries()
+                this.loadSlaTimeseries(),
+                this.loadLaunchKpis()
             ]);
         } catch (error) {
             console.error('Failed to load dashboard:', error);
@@ -655,6 +656,51 @@ class AnalyticsDashboard {
         setTimeout(() => {
             errorDiv.remove();
         }, 5000);
+    }
+
+    // Launch KPIs summary leveraging existing endpoints
+    async loadLaunchKpis() {
+        try {
+            // Metrics (today)
+            const metricsResp = await fetch(`/api/analytics/metrics/daily?timeRange=day`);
+            const metricsJson = await metricsResp.json();
+            const today = (metricsJson.success && metricsJson.data && metricsJson.data[0]) ? metricsJson.data[0] : {};
+            const dau = today.daily_active_users || 0;
+            const tasks = today.tasks_created || 0;
+            if (document.getElementById('launchDAU')) {
+                document.getElementById('launchDAU').textContent = dau.toLocaleString();
+            }
+            if (document.getElementById('launchTasks')) {
+                document.getElementById('launchTasks').textContent = tasks.toLocaleString();
+            }
+
+            // Conversion funnel
+            const convResp = await fetch('/api/analytics/conversion');
+            const convJson = await convResp.json();
+            const conv = (convJson.success && convJson.data && convJson.data[0]) ? convJson.data[0] : {};
+            if (document.getElementById('launchOnboardingRate')) {
+                document.getElementById('launchOnboardingRate').textContent = `${conv.onboarding_completion_rate || 0}%`;
+            }
+            if (document.getElementById('launchTrialRate')) {
+                document.getElementById('launchTrialRate').textContent = `${conv.trial_conversion_rate || 0}%`;
+            }
+            if (document.getElementById('launchPremiumRate')) {
+                document.getElementById('launchPremiumRate').textContent = `${conv.premium_conversion_rate || 0}%`;
+            }
+
+            // SLA
+            const slaResp = await fetch('/api/monitoring/sla?window=1h');
+            const slaJson = await slaResp.json();
+            const sla = slaJson.success ? slaJson.data : {};
+            if (document.getElementById('launchSlaSuccess')) {
+                document.getElementById('launchSlaSuccess').textContent = `${(sla.success_rate || 0).toFixed(2)}%`;
+            }
+            if (document.getElementById('launchP95')) {
+                document.getElementById('launchP95').textContent = `${sla.p95_latency_ms || 0} ms`;
+            }
+        } catch (e) {
+            console.error('Failed to load launch KPIs', e);
+        }
     }
 }
 
