@@ -18,7 +18,7 @@ backend/src/dashboard/
 
 # iOS
 DerivedData/
-NearMe.xcodeproj/project.xcworkspace/
+ios/NearMe.xcodeproj/project.xcworkspace/
 
 # Android
 android/.gradle/
