@@ -7,8 +7,23 @@ import { CreatePlaceRequest, UpdatePlaceRequest, Coordinate } from '../models/ty
 import { getDbConnection } from '../database/connection';
 
 const router = Router();
-const placeService = new PlaceService(getDbConnection());
+let placeServiceInstance: PlaceService | null = null;
+function getPlaceService(): PlaceService {
+  if (!placeServiceInstance) {
+    placeServiceInstance = new PlaceService(getDbConnection());
+  }
+  return placeServiceInstance;
+}
 const geocodingService = new GeocodingService();
+
+// Local request type that includes authenticated user
+type AuthenticatedRequest = Request & {
+  user?: {
+    id: string;
+    email?: string;
+    roles?: string[];
+  };
+};
 
 // Apply authentication to all routes
 router.use(authenticateToken);
@@ -16,12 +31,12 @@ router.use(authenticateToken);
 /**
  * GET /places - Get all places for the authenticated user
  */
-router.get('/', async (req: Request, res: Response) => {
+router.get('/', async (req: AuthenticatedRequest, res: Response) => {
   try {
     const userId = req.user!.id;
     const updatedSinceParam = req.query.updated_since as string | undefined;
     const updatedSince = updatedSinceParam ? new Date(updatedSinceParam) : undefined;
-    const places = await placeService.getUserPlaces(userId, updatedSince && !isNaN(updatedSince.getTime()) ? updatedSince : undefined);
+    const places = await getPlaceService().getUserPlaces(userId, updatedSince && !isNaN(updatedSince.getTime()) ? updatedSince : undefined);
     
     return res.json({
       success: true,
@@ -39,12 +54,12 @@ router.get('/', async (req: Request, res: Response) => {
 /**
  * GET /places/:id - Get a specific place
  */
-router.get('/:id', async (req: Request, res: Response) => {
+router.get('/:id', async (req: AuthenticatedRequest, res: Response) => {
   try {
     const userId = req.user!.id;
     const placeId = req.params.id;
     
-    const place = await placeService.getPlaceById(placeId, userId);
+    const place = await getPlaceService().getPlaceById(placeId, userId);
     
     if (!place) {
       return res.status(404).json({
@@ -53,7 +68,7 @@ router.get('/:id', async (req: Request, res: Response) => {
       });
     }
     
-    res.json({
+    return res.json({
       success: true,
       data: place.toJSON(),
     });
@@ -69,7 +84,7 @@ router.get('/:id', async (req: Request, res: Response) => {
 /**
  * POST /places - Create a new place
  */
-router.post('/', async (req: Request, res: Response) => {
+router.post('/', async (req: AuthenticatedRequest, res: Response) => {
   try {
     const userId = req.user!.id;
     const createRequest = validateSchema<CreatePlaceRequest>(
@@ -77,9 +92,9 @@ router.post('/', async (req: Request, res: Response) => {
       req.body
     );
     
-    const place = await placeService.createPlace(userId, createRequest);
+    const place = await getPlaceService().createPlace(userId, createRequest);
     
-    res.status(201).json({
+    return res.status(201).json({
       success: true,
       data: place.toJSON(),
     });
@@ -103,7 +118,7 @@ router.post('/', async (req: Request, res: Response) => {
 /**
  * PUT /places/:id - Update a place
  */
-router.put('/:id', async (req: Request, res: Response) => {
+router.put('/:id', async (req: AuthenticatedRequest, res: Response) => {
   try {
     const userId = req.user!.id;
     const placeId = req.params.id;
@@ -112,7 +127,7 @@ router.put('/:id', async (req: Request, res: Response) => {
       req.body
     );
     
-    const place = await placeService.updatePlace(placeId, userId, updateRequest);
+    const place = await getPlaceService().updatePlace(placeId, userId, updateRequest);
     
     if (!place) {
       return res.status(404).json({
@@ -121,7 +136,7 @@ router.put('/:id', async (req: Request, res: Response) => {
       });
     }
     
-    res.json({
+    return res.json({
       success: true,
       data: place.toJSON(),
     });
@@ -145,12 +160,12 @@ router.put('/:id', async (req: Request, res: Response) => {
 /**
  * DELETE /places/:id - Delete a place
  */
-router.delete('/:id', async (req: Request, res: Response) => {
+router.delete('/:id', async (req: AuthenticatedRequest, res: Response) => {
   try {
     const userId = req.user!.id;
     const placeId = req.params.id;
     
-    const deleted = await placeService.deletePlace(placeId, userId);
+    const deleted = await getPlaceService().deletePlace(placeId, userId);
     
     if (!deleted) {
       return res.status(404).json({
@@ -159,7 +174,7 @@ router.delete('/:id', async (req: Request, res: Response) => {
       });
     }
     
-    res.json({
+    return res.json({
       success: true,
       message: 'Place deleted successfully',
     });
@@ -183,7 +198,7 @@ router.delete('/:id', async (req: Request, res: Response) => {
 /**
  * GET /places/search - Search places by name or address
  */
-router.get('/search', async (req: Request, res: Response) => {
+router.get('/search', async (req: AuthenticatedRequest, res: Response) => {
   try {
     const userId = req.user!.id;
     const query = req.query.q as string;
@@ -195,9 +210,9 @@ router.get('/search', async (req: Request, res: Response) => {
       });
     }
     
-    const places = await placeService.searchPlaces(userId, query.trim());
+    const places = await getPlaceService().searchPlaces(userId, query.trim());
     
-    res.json({
+    return res.json({
       success: true,
       data: places.map(place => place.toJSON()),
     });
@@ -213,7 +228,7 @@ router.get('/search', async (req: Request, res: Response) => {
 /**
  * GET /places/nearby - Find places near a coordinate
  */
-router.get('/nearby', async (req: Request, res: Response) => {
+router.get('/nearby', async (req: AuthenticatedRequest, res: Response) => {
   try {
     const userId = req.user!.id;
     const { latitude, longitude, radius } = validateSchema<{
@@ -223,9 +238,9 @@ router.get('/nearby', async (req: Request, res: Response) => {
     }>(locationQuerySchema, req.query);
     
     const coordinate: Coordinate = { latitude, longitude };
-    const places = await placeService.findNearbyPlaces(userId, coordinate, radius);
+    const places = await getPlaceService().findNearbyPlaces(userId, coordinate, radius);
     
-    res.json({
+    return res.json({
       success: true,
       data: places.map(place => place.toJSON()),
     });
@@ -249,7 +264,7 @@ router.get('/nearby', async (req: Request, res: Response) => {
 /**
  * POST /places/from-address - Create place from address
  */
-router.post('/from-address', async (req: Request, res: Response) => {
+router.post('/from-address', async (req: AuthenticatedRequest, res: Response) => {
   try {
     const userId = req.user!.id;
     const { name, address, place_type = 'custom' } = req.body;
@@ -261,9 +276,9 @@ router.post('/from-address', async (req: Request, res: Response) => {
       });
     }
     
-    const place = await placeService.createPlaceFromAddress(userId, name, address, place_type);
+    const place = await getPlaceService().createPlaceFromAddress(userId, name, address, place_type);
     
-    res.status(201).json({
+    return res.status(201).json({
       success: true,
       data: place.toJSON(),
     });
@@ -287,12 +302,12 @@ router.post('/from-address', async (req: Request, res: Response) => {
 /**
  * GET /places/stats - Get place statistics
  */
-router.get('/stats', async (req: Request, res: Response) => {
+router.get('/stats', async (req: AuthenticatedRequest, res: Response) => {
   try {
     const userId = req.user!.id;
-    const stats = await placeService.getPlaceStats(userId);
+    const stats = await getPlaceService().getPlaceStats(userId);
     
-    res.json({
+    return res.json({
       success: true,
       data: stats,
     });
@@ -328,7 +343,7 @@ router.post('/geocode', async (req: Request, res: Response) => {
       });
     }
     
-    res.json({
+    return res.json({
       success: true,
       data: result,
     });
@@ -364,7 +379,7 @@ router.post('/reverse-geocode', async (req: Request, res: Response) => {
       });
     }
     
-    res.json({
+    return res.json({
       success: true,
       data: result,
     });

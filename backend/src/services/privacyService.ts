@@ -326,7 +326,16 @@ export class PrivacyService {
 
   private async generateCsvExport(filePath: string, data: ExportedData) {
     // Create a summary CSV with all data types
-    const summaryData = [];
+    type SummaryRow = {
+      type: string;
+      id: string;
+      title: string;
+      description: string;
+      status: string;
+      created_at: any;
+      location_info: string;
+    };
+    const summaryData: SummaryRow[] = [];
 
     if (data.tasks) {
       data.tasks.forEach(task => {

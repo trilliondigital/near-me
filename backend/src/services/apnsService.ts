@@ -142,6 +142,7 @@ export class APNsService {
     notification: LocationNotification | NotificationBundle,
     customData?: Record<string, any>
   ): APNsPayload {
+    const isLocation = 'type' in notification;
     const payload: APNsPayload = {
       aps: {
         alert: {
@@ -151,9 +152,9 @@ export class APNsService {
         sound: 'default',
         category: 'LOCATION_REMINDER'
       },
-      task_id: notification.taskId,
+      task_id: isLocation ? (notification as LocationNotification).taskId : undefined,
       notification_id: notification.id,
-      action_type: notification.type
+      action_type: isLocation ? (notification as LocationNotification).type : 'bundle'
     };
 
     // Add custom data

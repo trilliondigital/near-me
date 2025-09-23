@@ -21,13 +21,13 @@ router.get('/categories', async (req: Request, res: Response) => {
       name: POI.getCategoryDisplayName(category),
     }));
     
-    res.json({
+    return res.json({
       success: true,
       data: categories,
     });
   } catch (error) {
     console.error('Error getting POI categories:', error);
-    res.status(500).json({
+    return res.status(500).json({
       success: false,
       error: 'Failed to get POI categories',
     });
@@ -64,7 +64,7 @@ router.get('/search', async (req: Request, res: Response) => {
       limit,
     });
 
-    res.json({
+    return res.json({
       success: true,
       data: pois,
     });
@@ -78,7 +78,7 @@ router.get('/search', async (req: Request, res: Response) => {
       });
     }
     
-    res.status(500).json({
+    return res.status(500).json({
       success: false,
       error: 'Failed to search POIs',
     });
@@ -108,7 +108,7 @@ router.get('/category/:category', async (req: Request, res: Response) => {
     const coordinate: Coordinate = { latitude, longitude };
     const pois = await poiService.getPOIsByCategory(coordinate, category, radius);
 
-    res.json({
+    return res.json({
       success: true,
       data: pois,
     });
@@ -122,7 +122,7 @@ router.get('/category/:category', async (req: Request, res: Response) => {
       });
     }
     
-    res.status(500).json({
+    return res.status(500).json({
       success: false,
       error: 'Failed to get POIs by category',
     });
@@ -167,7 +167,7 @@ router.get('/closest/:category', async (req: Request, res: Response) => {
       });
     }
 
-    res.json({
+    return res.json({
       success: true,
       data: poi,
     });
@@ -181,7 +181,7 @@ router.get('/closest/:category', async (req: Request, res: Response) => {
       });
     }
     
-    res.status(500).json({
+    return res.status(500).json({
       success: false,
       error: 'Failed to find closest POI',
     });
@@ -224,7 +224,7 @@ router.get('/nearby-all', async (req: Request, res: Response) => {
       }
     });
 
-    res.json({
+    return res.json({
       success: true,
       data: {
         coordinate,
@@ -243,7 +243,7 @@ router.get('/nearby-all', async (req: Request, res: Response) => {
       });
     }
     
-    res.status(500).json({
+    return res.status(500).json({
       success: false,
       error: 'Failed to get nearby POIs',
     });
@@ -266,7 +266,7 @@ router.post('/validate-category', async (req: Request, res: Response) => {
 
     const isValid = POI.isValidCategory(category);
     
-    res.json({
+    return res.json({
       success: true,
       data: {
         category,
@@ -276,7 +276,7 @@ router.post('/validate-category', async (req: Request, res: Response) => {
     });
   } catch (error) {
     console.error('Error validating category:', error);
-    res.status(500).json({
+    return res.status(500).json({
       success: false,
       error: 'Failed to validate category',
     });

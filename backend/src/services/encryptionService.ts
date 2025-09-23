@@ -78,7 +78,7 @@ export class EncryptionService {
   static encrypt(plaintext: string): string {
     try {
       if (!plaintext || typeof plaintext !== 'string') {
-        throw new ValidationError('Plaintext must be a non-empty string');
+        throw new ValidationError('Plaintext must be a non-empty string', []);
       }
 
       // Generate random salt and IV
@@ -88,23 +88,29 @@ export class EncryptionService {
       // Derive encryption key
       const key = this.deriveKey(salt);
       
-      // Create cipher
-      const cipher = crypto.createCipher(ENCRYPTION_CONFIG.algorithm, key);
-      cipher.setAAD(salt); // Use salt as additional authenticated data
+      // Create cipher (AES-256-GCM) with IV and AAD
+      const cipher = crypto.createCipheriv(
+        ENCRYPTION_CONFIG.algorithm,
+        key,
+        iv
+      );
+      (cipher as any).setAAD(salt); // Use salt as additional authenticated data
       
       // Encrypt data
-      let encrypted = cipher.update(plaintext, 'utf8', 'hex');
-      encrypted += cipher.final('hex');
+      const encryptedBuf = Buffer.concat([
+        cipher.update(plaintext, 'utf8'),
+        cipher.final()
+      ]);
       
       // Get authentication tag
-      const tag = cipher.getAuthTag();
+      const tag = (cipher as any).getAuthTag();
       
       // Combine salt + iv + tag + encrypted data
       const combined = Buffer.concat([
         salt,
         iv,
         tag,
-        Buffer.from(encrypted, 'hex')
+        encryptedBuf
       ]);
       
       return combined.toString('base64');
@@ -121,7 +127,7 @@ export class EncryptionService {
   static decrypt(encryptedData: string): string {
     try {
       if (!encryptedData || typeof encryptedData !== 'string') {
-        throw new ValidationError('Encrypted data must be a non-empty string');
+        throw new ValidationError('Encrypted data must be a non-empty string', []);
       }
 
       // Parse combined data
@@ -142,14 +148,20 @@ export class EncryptionService {
       // Derive decryption key
       const key = this.deriveKey(salt);
       
-      // Create decipher
-      const decipher = crypto.createDecipher(ENCRYPTION_CONFIG.algorithm, key);
-      decipher.setAAD(salt);
-      decipher.setAuthTag(tag);
+      // Create decipher (AES-256-GCM) and set AAD + auth tag
+      const decipher = crypto.createDecipheriv(
+        ENCRYPTION_CONFIG.algorithm,
+        key,
+        iv
+      );
+      (decipher as any).setAAD(salt);
+      (decipher as any).setAuthTag(tag);
       
       // Decrypt data
-      let decrypted = decipher.update(encrypted, undefined, 'utf8');
-      decrypted += decipher.final('utf8');
+      const decrypted = Buffer.concat([
+        decipher.update(encrypted),
+        decipher.final()
+      ]).toString('utf8');
       
       return decrypted;
       
@@ -164,15 +176,15 @@ export class EncryptionService {
    */
   static async hashPassword(password: string): Promise<string> {
     if (!password || typeof password !== 'string') {
-      throw new ValidationError('Password must be a non-empty string');
+      throw new ValidationError('Password must be a non-empty string', []);
     }
 
     if (password.length < 8) {
-      throw new ValidationError('Password must be at least 8 characters long');
+      throw new ValidationError('Password must be at least 8 characters long', []);
     }
 
     if (password.length > 128) {
-      throw new ValidationError('Password must be less than 128 characters');
+      throw new ValidationError('Password must be less than 128 characters', []);
     }
 
     const saltRounds = 12; // Recommended for 2024

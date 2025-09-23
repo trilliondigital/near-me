@@ -6,12 +6,12 @@ A location-aware reminder application that helps users complete context-sensitiv
 
 ```
 Near Me/
-├── NearMe/                 # iOS app (SwiftUI)
+├── ios/NearMe/            # iOS app (SwiftUI)
 ├── android/                # Android app (Kotlin + Jetpack Compose)
 ├── backend/                # Node.js/Express API server
 ├── database/               # Database configuration and migrations
 ├── .github/workflows/      # CI/CD pipelines
-└── Near Me Documents/      # Project documentation
+└── docs/                   # Project documentation
 ```
 
 ## Development Setup
@@ -47,7 +47,7 @@ Near Me/
    ```
 
 4. **iOS Development**
-   - Open `NearMe.xcodeproj` in Xcode
+   - Open `ios/NearMe.xcodeproj` in Xcode
    - Build and run on simulator or device
 
 5. **Android Development**
@@ -80,7 +80,7 @@ You can run tests in Xcode or via CLI:
 - Xcode: Product > Test
 - CLI example:
   ```bash
-  xcodebuild -project NearMe.xcodeproj \
+  xcodebuild -project ios/NearMe.xcodeproj \
     -scheme NearMe \
     -destination 'platform=iOS Simulator,name=iPhone 15,OS=17.0' \
     -configuration Debug \
@@ -106,6 +106,15 @@ Notes:
 - Backend CI uses the PostGIS image to support `CREATE EXTENSION postgis` used by schema SQL
 - Ensure any new tests are deterministic (DB is truncated and Redis flushed per test)
 
+## Code Quality & Standards
+
+See `docs/CODE_QUALITY.md` for full details.
+
+- Prettier (docs/config): configured via `.prettierrc`. Example: `npx prettier --check .`
+- Backend ESLint: `cd backend && npm run lint` (auto-fix: `npm run lint:fix`)
+- Android formatting (Spotless): `cd android && ./gradlew spotlessCheck` (fix: `spotlessApply`)
+- iOS SwiftLint: `brew install swiftlint` then `swiftlint --strict`
+
 ## Features
 
 - **Tiered Geofencing**: Multiple notification zones (5mi, 3mi, 1mi, arrival, post-arrival)
@@ -128,11 +137,11 @@ This project is currently in active development. See the [task list](.kiro/specs
 
 ## Release
 
-- Store listings templates: `Near Me Documents/Release/AppStore_Listing_Template.md`, `Near Me Documents/Release/PlayStore_Listing_Template.md`
-- Staged rollout plan: `Near Me Documents/Release/Rollout_Plan.md`
-- Support & FAQ: `Near Me Documents/Release/Support_and_FAQ.md`
-- Launch validation checklist: `Near Me Documents/Release/Launch_Validation_Checklist.md`
-- Privacy policy draft: `Near Me Documents/Release/Privacy_Policy_Draft.md`
+- Store listings templates: `docs/release/AppStore_Listing_Template.md`, `docs/release/PlayStore_Listing_Template.md`
+- Staged rollout plan: `docs/release/Rollout_Plan.md`
+- Support & FAQ: `docs/release/Support_and_FAQ.md`
+- Launch validation checklist: `docs/release/Launch_Validation_Checklist.md`
+- Privacy policy draft: `docs/release/Privacy_Policy_Draft.md`
 - Monitoring dashboard: `backend/src/dashboard/` (includes Launch KPIs)
 
 ### Android (Release build)
@@ -150,34 +159,3 @@ This project is currently in active development. See the [task list](.kiro/specs
 ## License
 
 MIT License - see LICENSE file for details.
-
-A location-based iOS app built with Swift and UIKit.
-
-## Features
-
-- Location-based services
-- Clean, modern UI
-- iOS 17+ support
-
-## Setup
-
-1. Open `NearMe.xcodeproj` in Xcode
-2. Select your development team in project settings
-3. Build and run on simulator or device
-
-## Development
-
-- **Language**: Swift 5.0
-- **Minimum iOS**: 17.0
-- **Architecture**: MVC with Storyboards
-
-## Getting Started
-
-The app is ready to build and run. The main view controller displays a simple "Near Me App" label. You can start adding location services and UI components from here.
-
-## Next Steps
-
-- Add Core Location framework
-- Implement location permissions
-- Add map view
-- Create location-based features

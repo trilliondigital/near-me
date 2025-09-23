@@ -701,7 +701,8 @@ export class NotificationService {
         // Find the task and unmute it
         const task = await Task.findById(mute.taskId, mute.userId);
         if (task) {
-          await task.unmute();
+          // Reactivate task after mute expiration
+          await task.reactivate();
           console.log(`Unmuted task ${mute.taskId} after mute expired`);
         }
       } catch (error) {
@@ -777,11 +778,20 @@ export class NotificationService {
           this.STANDARD_ACTIONS.mute
         ] : [],
         scheduledTime: notificationHistory.scheduledTime,
-        metadata: notificationHistory.metadata || {
-          geofenceId: '',
-          geofenceType: 'arrival',
-          location: { latitude: 0, longitude: 0 }
-        }
+        metadata: ((): LocationNotification['metadata'] => {
+          const md = notificationHistory.metadata || {};
+          if ('geofenceId' in md && 'geofenceType' in md && 'location' in md) {
+            return md as any;
+          }
+          return {
+            geofenceId: md.geofenceId || '',
+            geofenceType: (md.geofenceType as any) || 'arrival',
+            location: md.location || { latitude: 0, longitude: 0 },
+            placeName: md.placeName,
+            category: md.category,
+            distance: md.distance
+          };
+        })()
       };
       
       // Send push notification

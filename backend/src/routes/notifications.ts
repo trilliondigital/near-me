@@ -1,8 +1,14 @@
-import { Router, Response, NextFunction } from 'express';
+import { Router, Response, NextFunction, Request } from 'express';
 import { NotificationService } from '../services/notificationService';
 import { NotificationScheduler } from '../services/notificationScheduler';
 import { GeofenceEvent } from '../models/GeofenceEvent';
-import { AuthenticatedRequest } from '../middleware/auth';
+type AuthenticatedRequest = Request & {
+  user?: {
+    id: string;
+    email?: string;
+    roles?: string[];
+  };
+};
 import { ValidationError } from '../models/validation';
 
 const router = Router();
@@ -41,7 +47,7 @@ router.post('/geofence-event', async (req: AuthenticatedRequest, res: Response, 
     // Schedule the notification
     const scheduled = await NotificationScheduler.scheduleNotification(notification);
 
-    res.status(201).json({
+    return res.status(201).json({
       message: 'Geofence event processed and notification scheduled',
       event: geofenceEvent.toJSON(),
       notification: {
@@ -53,7 +59,7 @@ router.post('/geofence-event', async (req: AuthenticatedRequest, res: Response, 
       }
     });
   } catch (error) {
-    next(error);
+    return next(error);
   }
 });
 
@@ -85,13 +91,13 @@ router.post('/:notificationId/action', async (req: AuthenticatedRequest, res: Re
     // Handle the notification action
     await NotificationService.handleNotificationAction(notificationId, action, userId);
 
-    res.status(200).json({
+    return res.status(200).json({
       message: 'Notification action processed successfully',
       notificationId,
       action
     });
   } catch (error) {
-    next(error);
+    return next(error);
   }
 });
 
@@ -104,26 +110,30 @@ router.get('/scheduled', async (req: AuthenticatedRequest, res: Response, next: 
     const userId = req.user!.id;
     const scheduledNotifications = NotificationScheduler.getScheduledNotifications(userId);
 
-    res.status(200).json({
-      notifications: scheduledNotifications.map(scheduled => ({
+    const notifications = scheduledNotifications.map(scheduled => {
+      const n = scheduled.notification as any;
+      const isLocation = 'type' in n;
+      return {
         id: scheduled.id,
         notification: {
-          id: scheduled.notification.id,
-          type: scheduled.notification.type,
-          title: scheduled.notification.title,
-          body: scheduled.notification.body,
-          actions: scheduled.notification.actions,
-          metadata: scheduled.notification.metadata
+          id: n.id,
+          type: isLocation ? n.type : 'bundle',
+          title: n.title,
+          body: n.body,
+          actions: n.actions,
+          metadata: isLocation ? n.metadata : undefined
         },
         scheduledTime: scheduled.scheduledTime,
         status: scheduled.status,
         attempts: scheduled.attempts,
         lastAttempt: scheduled.lastAttempt,
         error: scheduled.error
-      }))
+      };
     });
+
+    return res.status(200).json({ notifications });
   } catch (error) {
-    next(error);
+    return next(error);
   }
 });
 
@@ -149,17 +159,17 @@ router.delete('/:notificationId', async (req: AuthenticatedRequest, res: Respons
     const cancelled = await NotificationScheduler.cancelNotification(notificationId);
 
     if (cancelled) {
-      res.status(200).json({
+      return res.status(200).json({
         message: 'Notification cancelled successfully',
         notificationId
       });
     } else {
-      res.status(404).json({
+      return res.status(404).json({
         error: 'Notification not found'
       });
     }
   } catch (error) {
-    next(error);
+    return next(error);
   }
 });
 
@@ -191,7 +201,7 @@ router.post('/bundle', async (req: AuthenticatedRequest, res: Response, next: Ne
     // Bundle the notifications
     const bundles = await NotificationService.bundleNotifications(userNotifications);
 
-    res.status(200).json({
+    return res.status(200).json({
       message: 'Notifications bundled successfully',
       bundles: bundles.map(bundle => ({
         id: bundle.id,
@@ -207,7 +217,7 @@ router.post('/bundle', async (req: AuthenticatedRequest, res: Response, next: Ne
       totalCount: userNotifications.length
     });
   } catch (error) {
-    next(error);
+    return next(error);
   }
 });
 
@@ -230,12 +240,12 @@ router.get('/stats', async (req: AuthenticatedRequest, res: Response, next: Next
       cancelled: userNotifications.filter(n => n.status === 'cancelled').length
     };
 
-    res.status(200).json({
+    return res.status(200).json({
       user: userStats,
       system: allStats
     });
   } catch (error) {
-    next(error);
+    return next(error);
   }
 });
 

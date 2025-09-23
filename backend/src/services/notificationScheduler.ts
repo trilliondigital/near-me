@@ -335,7 +335,7 @@ export class NotificationScheduler {
       if (!user) return false;
       
       // Check if user has enabled focus mode respect
-      const focusModeEnabled = user.preferences?.focusModeRespect || false;
+      const focusModeEnabled = this.config.focusModeRespect;
       if (!focusModeEnabled) return false;
       
       // Check if user is currently in a focus session
@@ -387,7 +387,7 @@ export class NotificationScheduler {
     try {
       // Get user's push token
       const user = await User.findById(notification.userId);
-      if (!user || !user.push_token || !user.push_token.is_active) {
+      if (!user || !user.push_token || !user.push_token.isActive) {
         return {
           success: false,
           error: 'User has no active push token'
@@ -395,6 +395,7 @@ export class NotificationScheduler {
       }
 
       // Create APNs payload
+      const isLocation = 'type' in notification;
       const payload = {
         aps: {
           alert: {
@@ -404,14 +405,14 @@ export class NotificationScheduler {
           sound: 'default',
           category: 'LOCATION_REMINDER'
         },
-        task_id: notification.taskId,
+        task_id: isLocation ? (notification as any).taskId : undefined,
         notification_id: notification.id,
-        action_type: notification.type
+        action_type: isLocation ? (notification as any).type : 'bundle'
       };
 
       // Send via APNs (using mock service for now)
       const result = await MockAPNsService.sendNotification(
-        user.push_token.device_token,
+        user.push_token.deviceToken,
         payload
       );
 

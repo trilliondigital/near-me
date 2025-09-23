@@ -87,7 +87,7 @@ export const sensitiveOperationRateLimit = createRateLimit({
 export const speedLimiter = slowDown({
   windowMs: 15 * 60 * 1000, // 15 minutes
   delayAfter: 50, // Allow 50 requests per windowMs without delay
-  delayMs: 500, // Add 500ms delay per request after delayAfter
+  delayMs: () => 500, // Add 500ms delay per request after delayAfter (v2 API)
   maxDelayMs: 20000, // Maximum delay of 20 seconds
   skipSuccessfulRequests: true
 });
@@ -170,17 +170,18 @@ export function sanitizeCoordinates(lat: any, lng: any): { latitude: number; lon
  * Middleware to validate request body size and structure
  */
 export function validateRequestBody(maxSize: number = 1024 * 1024) { // 1MB default
-  return (req: Request, res: Response, next: NextFunction) => {
+  return (req: Request, res: Response, next: NextFunction): void => {
     const contentLength = parseInt(req.get('content-length') || '0');
     
     if (contentLength > maxSize) {
-      return res.status(413).json({
+      res.status(413).json({
         error: {
           code: 'PAYLOAD_TOO_LARGE',
           message: `Request body too large. Maximum size is ${maxSize} bytes.`,
           timestamp: new Date().toISOString()
         }
       });
+      return;
     }
     
     // Validate JSON structure if content-type is JSON
@@ -189,22 +190,24 @@ export function validateRequestBody(maxSize: number = 1024 * 1024) { // 1MB defa
         // Check for deeply nested objects (potential DoS)
         const depth = getObjectDepth(req.body);
         if (depth > 10) {
-          return res.status(400).json({
+          res.status(400).json({
             error: {
               code: 'INVALID_REQUEST',
               message: 'Request body structure too complex',
               timestamp: new Date().toISOString()
             }
           });
+          return;
         }
       } catch (error) {
-        return res.status(400).json({
+        res.status(400).json({
           error: {
             code: 'INVALID_JSON',
             message: 'Invalid JSON structure',
             timestamp: new Date().toISOString()
           }
         });
+        return;
       }
     }
     
@@ -255,7 +258,6 @@ export const securityHeaders = helmet({
   },
   noSniff: true,
   frameguard: { action: 'deny' },
-  xssFilter: true,
   referrerPolicy: { policy: 'strict-origin-when-cross-origin' }
 });
 
@@ -363,18 +365,19 @@ export const corsOptions = {
 /**
  * API key validation middleware for external integrations
  */
-export function validateApiKey(req: Request, res: Response, next: NextFunction) {
+export function validateApiKey(req: Request, res: Response, next: NextFunction): void {
   const apiKey = req.get('X-API-Key');
   const validApiKeys = (process.env.VALID_API_KEYS || '').split(',').filter(Boolean);
   
   if (!apiKey) {
-    return res.status(401).json({
+    res.status(401).json({
       error: {
         code: 'MISSING_API_KEY',
         message: 'API key is required',
         timestamp: new Date().toISOString()
       }
     });
+    return;
   }
   
   if (!validApiKeys.includes(apiKey)) {
@@ -384,13 +387,14 @@ export function validateApiKey(req: Request, res: Response, next: NextFunction) 
       userAgent: req.get('User-Agent')
     });
     
-    return res.status(401).json({
+    res.status(401).json({
       error: {
         code: 'INVALID_API_KEY',
         message: 'Invalid API key',
         timestamp: new Date().toISOString()
       }
     });
+    return;
   }
   
   next();
@@ -414,18 +418,19 @@ export function requestId(req: Request, res: Response, next: NextFunction) {
  * Validate content type for POST/PUT requests
  */
 export function validateContentType(allowedTypes: string[] = ['application/json']) {
-  return (req: Request, res: Response, next: NextFunction) => {
+  return (req: Request, res: Response, next: NextFunction): void => {
     if (['POST', 'PUT', 'PATCH'].includes(req.method)) {
       const contentType = req.get('Content-Type');
       
       if (!contentType || !allowedTypes.some(type => contentType.includes(type))) {
-        return res.status(415).json({
+        res.status(415).json({
           error: {
             code: 'UNSUPPORTED_MEDIA_TYPE',
             message: `Content-Type must be one of: ${allowedTypes.join(', ')}`,
             timestamp: new Date().toISOString()
           }
         });
+        return;
       }
     }
     

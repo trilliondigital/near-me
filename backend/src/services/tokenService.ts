@@ -1,4 +1,4 @@
-import jwt from 'jsonwebtoken';
+import jwt, { SignOptions } from 'jsonwebtoken';
 import crypto from 'crypto';
 import { EncryptionService } from './encryptionService';
 import { ValidationError } from '../models/validation';
@@ -6,17 +6,17 @@ import { ValidationError } from '../models/validation';
 // MARK: - Token Configuration
 
 interface TokenConfig {
-  accessTokenExpiry: string;
-  refreshTokenExpiry: string;
-  resetTokenExpiry: string;
-  apiKeyExpiry: string;
+  accessTokenExpiry: number; // seconds
+  refreshTokenExpiry: number; // seconds
+  resetTokenExpiry: number; // seconds
+  apiKeyExpiry: number; // seconds
 }
 
 const TOKEN_CONFIG: TokenConfig = {
-  accessTokenExpiry: '15m',      // 15 minutes
-  refreshTokenExpiry: '7d',      // 7 days
-  resetTokenExpiry: '1h',        // 1 hour
-  apiKeyExpiry: '365d'           // 1 year
+  accessTokenExpiry: 15 * 60,            // 15 minutes
+  refreshTokenExpiry: 7 * 24 * 60 * 60,  // 7 days
+  resetTokenExpiry: 60 * 60,             // 1 hour
+  apiKeyExpiry: 365 * 24 * 60 * 60       // 1 year
 };
 
 // MARK: - Token Types
@@ -64,6 +64,13 @@ export class TokenService {
   private static refreshSecret: string;
   
   /**
+   * Wrapper around jwt.sign to avoid TS overload selection issues across versions
+   */
+  private static sign(payload: any, secret: string, options: SignOptions): string {
+    return (jwt as any).sign(payload, secret, options);
+  }
+  
+  /**
    * Initialize token service with secrets
    */
   static initialize(): void {
@@ -90,7 +97,7 @@ export class TokenService {
   static generateAccessToken(payload: Omit<AccessTokenPayload, 'iat' | 'exp'>): string {
     if (!this.jwtSecret) this.initialize();
     
-    return jwt.sign(payload, this.jwtSecret, {
+    return this.sign(payload, this.jwtSecret, {
       expiresIn: TOKEN_CONFIG.accessTokenExpiry,
       issuer: 'nearme-api',
       audience: 'nearme-client',
@@ -104,7 +111,7 @@ export class TokenService {
   static generateRefreshToken(payload: Omit<RefreshTokenPayload, 'iat' | 'exp'>): string {
     if (!this.refreshSecret) this.initialize();
     
-    return jwt.sign(payload, this.refreshSecret, {
+    return this.sign(payload, this.refreshSecret, {
       expiresIn: TOKEN_CONFIG.refreshTokenExpiry,
       issuer: 'nearme-api',
       audience: 'nearme-client',
@@ -118,7 +125,7 @@ export class TokenService {
   static generateResetToken(payload: Omit<ResetTokenPayload, 'iat' | 'exp'>): string {
     if (!this.jwtSecret) this.initialize();
     
-    return jwt.sign(payload, this.jwtSecret, {
+    return this.sign(payload, this.jwtSecret, {
       expiresIn: TOKEN_CONFIG.resetTokenExpiry,
       issuer: 'nearme-api',
       audience: 'nearme-client',
@@ -132,7 +139,7 @@ export class TokenService {
   static generateApiKey(payload: Omit<ApiKeyPayload, 'iat' | 'exp'>): string {
     if (!this.jwtSecret) this.initialize();
     
-    return jwt.sign(payload, this.jwtSecret, {
+    return this.sign(payload, this.jwtSecret, {
       expiresIn: TOKEN_CONFIG.apiKeyExpiry,
       issuer: 'nearme-api',
       audience: 'nearme-api',
@@ -156,11 +163,11 @@ export class TokenService {
       return decoded;
     } catch (error) {
       if (error instanceof jwt.TokenExpiredError) {
-        throw new ValidationError('Access token expired');
+        throw new ValidationError('Access token expired', []);
       } else if (error instanceof jwt.JsonWebTokenError) {
-        throw new ValidationError('Invalid access token');
+        throw new ValidationError('Invalid access token', []);
       } else {
-        throw new ValidationError('Token verification failed');
+        throw new ValidationError('Token verification failed', []);
       }
     }
   }
@@ -181,11 +188,11 @@ export class TokenService {
       return decoded;
     } catch (error) {
       if (error instanceof jwt.TokenExpiredError) {
-        throw new ValidationError('Refresh token expired');
+        throw new ValidationError('Refresh token expired', []);
       } else if (error instanceof jwt.JsonWebTokenError) {
-        throw new ValidationError('Invalid refresh token');
+        throw new ValidationError('Invalid refresh token', []);
       } else {
-        throw new ValidationError('Refresh token verification failed');
+        throw new ValidationError('Refresh token verification failed', []);
       }
     }
   }
@@ -206,11 +213,11 @@ export class TokenService {
       return decoded;
     } catch (error) {
       if (error instanceof jwt.TokenExpiredError) {
-        throw new ValidationError('Reset token expired');
+        throw new ValidationError('Reset token expired', []);
       } else if (error instanceof jwt.JsonWebTokenError) {
-        throw new ValidationError('Invalid reset token');
+        throw new ValidationError('Invalid reset token', []);
       } else {
-        throw new ValidationError('Reset token verification failed');
+        throw new ValidationError('Reset token verification failed', []);
       }
     }
   }
@@ -231,11 +238,11 @@ export class TokenService {
       return decoded;
     } catch (error) {
       if (error instanceof jwt.TokenExpiredError) {
-        throw new ValidationError('API key expired');
+        throw new ValidationError('API key expired', []);
       } else if (error instanceof jwt.JsonWebTokenError) {
-        throw new ValidationError('Invalid API key');
+        throw new ValidationError('Invalid API key', []);
       } else {
-        throw new ValidationError('API key verification failed');
+        throw new ValidationError('API key verification failed', []);
       }
     }
   }
@@ -245,12 +252,12 @@ export class TokenService {
    */
   static extractBearerToken(authHeader: string): string {
     if (!authHeader) {
-      throw new ValidationError('Authorization header is required');
+      throw new ValidationError('Authorization header is required', []);
     }
 
     const parts = authHeader.split(' ');
     if (parts.length !== 2 || parts[0] !== 'Bearer') {
-      throw new ValidationError('Authorization header must be in format: Bearer <token>');
+      throw new ValidationError('Authorization header must be in format: Bearer <token>', []);
     }
 
     return parts[1];
@@ -296,7 +303,7 @@ export class TokenService {
     
     // Check token version for security
     if (payload.tokenVersion !== currentTokenVersion) {
-      throw new ValidationError('Refresh token version mismatch');
+      throw new ValidationError('Refresh token version mismatch', []);
     }
 
     // Generate new token pair with incremented version
@@ -399,14 +406,14 @@ export class TokenService {
       const tokenData = EncryptionService.decryptObject(token);
       
       if (Date.now() > tokenData.expires) {
-        throw new ValidationError('One-time token expired');
+        throw new ValidationError('One-time token expired', []);
       }
       
       // In production, check if token was already used (store nonce in Redis)
       
       return tokenData;
     } catch (error) {
-      throw new ValidationError('Invalid one-time token');
+      throw new ValidationError('Invalid one-time token', []);
     }
   }
 
