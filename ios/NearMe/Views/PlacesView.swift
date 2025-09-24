@@ -4,7 +4,8 @@ import MapKit
 // MARK: - Places View
 struct PlacesView: View {
     @EnvironmentObject var navigationCoordinator: NavigationCoordinator
-    @State private var places: [Place] = []
+    @StateObject private var placeService = PlaceService.shared
+    @ObservedObject private var offlineManager = OfflineManager.shared
     @State private var isLoading = false
     @State private var searchText = ""
     @State private var selectedCategory: PlaceCategory? = nil
@@ -37,20 +38,23 @@ struct PlacesView: View {
     }
     
     var filteredPlaces: [Place] {
-        var filtered = places
+        var filtered = placeService.places
         
         // Apply search filter
         if !searchText.isEmpty {
             filtered = filtered.filter { place in
                 place.name.localizedCaseInsensitiveContains(searchText) ||
-                place.address.localizedCaseInsensitiveContains(searchText)
+                (place.address ?? "").localizedCaseInsensitiveContains(searchText)
             }
         }
         
         // Apply category filter
         if let category = selectedCategory, category != .all {
-            filtered = filtered.filter { place in
-                place.category == category.rawValue
+            // For now, only filter custom places when selected; other categories are for POIs
+            if category == .custom {
+                filtered = filtered.filter { $0.placeType == .custom }
+            } else {
+                filtered = []
             }
         }
         
@@ -81,6 +85,9 @@ struct PlacesView: View {
             }
         ) {
             VStack(spacing: 0) {
+                if !offlineManager.isOnline {
+                    OfflineBanner()
+                }
                 // Search and Filter Section
                 VStack(spacing: DesignSystem.Spacing.md) {
                     SearchField(text: $searchText, placeholder: "Search places...")
@@ -109,7 +116,7 @@ struct PlacesView: View {
                     MapView(places: filteredPlaces, region: $region)
                 } else {
                     // Places List
-                    if isLoading {
+                    if isLoading || placeService.isLoading {
                         VStack {
                             Spacer()
                             ProgressView()
@@ -139,9 +146,9 @@ struct PlacesView: View {
                                 ForEach(filteredPlaces) { place in
                                     PlaceCard(
                                         name: place.name,
-                                        address: place.address,
-                                        category: place.category,
-                                        distance: place.distance,
+                                        address: place.address ?? "",
+                                        category: place.placeType.displayName,
+                                        distance: nil,
                                         action: {
                                             navigationCoordinator.navigateTo(.placeDetail(place.id))
                                         }
@@ -158,45 +165,7 @@ struct PlacesView: View {
             }
         }
         .onAppear {
-            loadPlaces()
-        }
-    }
-    
-    private func loadPlaces() {
-        isLoading = true
-        // TODO: Implement actual place loading from backend
-        DispatchQueue.main.asyncAfter(deadline: .now() + 1) {
-            // Mock data for now
-            places = [
-                Place(
-                    id: "1",
-                    name: "Whole Foods Market",
-                    address: "123 Main St, San Francisco, CA",
-                    category: "Grocery Store",
-                    latitude: 37.7749,
-                    longitude: -122.4194,
-                    distance: "0.5 mi"
-                ),
-                Place(
-                    id: "2",
-                    name: "Shell Gas Station",
-                    address: "456 Oak Ave, San Francisco, CA",
-                    category: "Gas Station",
-                    latitude: 37.7849,
-                    longitude: -122.4094,
-                    distance: "1.2 mi"
-                ),
-                Place(
-                    id: "3",
-                    name: "CVS Pharmacy",
-                    address: "789 Pine St, San Francisco, CA",
-                    category: "Pharmacy",
-                    latitude: 37.7649,
-                    longitude: -122.4294,
-                    distance: "0.8 mi"
-                )
-            ]
-            isLoading = false
+            placeService.fetchPlaces()
         }
     }
 }
@@ -261,9 +230,9 @@ struct MapView: View {
                     
                     PlaceCard(
                         name: selectedPlace.name,
-                        address: selectedPlace.address,
-                        category: selectedPlace.category,
-                        distance: selectedPlace.distance,
+                        address: selectedPlace.address ?? "",
+                        category: selectedPlace.placeType.displayName,
+                        distance: nil,
                         action: {
                             // TODO: Navigate to place detail
                         }
@@ -294,7 +263,7 @@ struct MapPinView: View {
     var body: some View {
         Button(action: action) {
             VStack(spacing: 0) {
-                Image(systemName: categoryIcon(place.category))
+                Image(systemName: categoryIcon(place.placeType.displayName))
                     .font(.system(size: 16, weight: .medium))
                     .foregroundColor(DesignSystem.Colors.textInverse)
                     .frame(width: 32, height: 32)
@@ -324,6 +293,9 @@ struct MapPinView: View {
         case "Grocery Store": return "cart"
         case "Bank": return "building.columns"
         case "Post Office": return "envelope"
+        case "Home": return "house"
+        case "Work": return "building.2"
+        case "Custom": return "mappin.circle"
         default: return "location"
         }
     }
@@ -341,16 +313,7 @@ struct Triangle: Shape {
     }
 }
 
-// MARK: - Place Model (Temporary)
-struct Place: Identifiable {
-    let id: String
-    let name: String
-    let address: String
-    let category: String
-    let latitude: Double
-    let longitude: Double
-    let distance: String?
-}
+// Removed temporary Place model in favor of app-wide model in Models/TaskModels.swift
 
 // MARK: - Places View Previews
 struct PlacesView_Previews: PreviewProvider {

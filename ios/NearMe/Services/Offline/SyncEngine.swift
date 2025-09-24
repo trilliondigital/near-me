@@ -16,6 +16,8 @@ final class SyncEngine {
                 if online {
                     self.flushOutbox()
                     self.deltaSync()
+                    // Also sync places when back online
+                    PlaceService.shared.fetchPlaces()
                 }
             }
             .store(in: &cancellables)
