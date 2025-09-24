@@ -1,7 +1,8 @@
 import { EventEmitter } from 'events';
 import { logger } from '../utils/logger';
 import { db } from '../database/connection';
-import { privacyService } from './privacyService';
+import { PrivacyService } from './privacyService';
+const privacyService = new PrivacyService();
 
 export interface UserEvent {
   userId: string;
@@ -159,7 +160,8 @@ class AnalyticsService extends EventEmitter {
     try {
       // Check user's privacy settings
       const privacySettings = await privacyService.getPrivacySettings(userId);
-      return privacySettings?.analyticsEnabled ?? true;
+      // Consent is granted if user has NOT opted out
+      return !(privacySettings?.analyticsOptOut ?? false);
     } catch (error) {
       logger.error('Failed to check analytics consent', error);
       return false; // Fail closed for privacy
@@ -519,7 +521,7 @@ class AnalyticsService extends EventEmitter {
         SELECT * FROM daily_user_metrics 
         WHERE date >= $1 AND date <= $2
       `;
-      const params = [startDate, endDate];
+      const params: any[] = [startDate, endDate];
 
       if (platform) {
         query += ` AND platform = $3`;
@@ -852,7 +854,7 @@ class AnalyticsService extends EventEmitter {
         status: 'critical',
         metric: 'events_per_hour',
         value: 0,
-        error: error.message
+        error: (error as any)?.message ?? String(error)
       };
     }
   }
@@ -880,7 +882,7 @@ class AnalyticsService extends EventEmitter {
         status: 'critical',
         metric: 'active_sessions',
         value: 0,
-        error: error.message
+        error: (error as any)?.message ?? String(error)
       };
     }
   }
@@ -901,7 +903,7 @@ class AnalyticsService extends EventEmitter {
         status: 'critical',
         metric: 'database_connection',
         value: 0,
-        error: error.message
+        error: (error as any)?.message ?? String(error)
       };
     }
   }
@@ -923,7 +925,7 @@ class AnalyticsService extends EventEmitter {
         status: 'critical',
         metric: 'avg_processing_time_ms',
         value: 0,
-        error: error.message
+        error: (error as any)?.message ?? String(error)
       };
     }
   }

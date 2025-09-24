@@ -2,7 +2,7 @@ import { Router, Request, Response } from 'express';
 import { PushNotificationService } from '../services/pushNotificationService';
 import { PushToken } from '../models/PushToken';
 import { ValidationError } from '../models/validation';
-import { authenticateUser } from '../middleware/auth';
+import { authenticateToken } from '../middleware/auth';
 
 const router = Router();
 
@@ -10,7 +10,7 @@ const router = Router();
  * Register device token for push notifications
  * POST /api/push-notifications/register
  */
-router.post('/register', authenticateUser, async (req: Request, res: Response) => {
+router.post('/register', authenticateToken, async (req: Request, res: Response) => {
   try {
     const { device_token, platform, device_id, app_version } = req.body;
     const userId = req.user?.id;
@@ -39,7 +39,7 @@ router.post('/register', authenticateUser, async (req: Request, res: Response) =
       app_version
     );
 
-    res.status(201).json({
+    return res.status(201).json({
       success: true,
       data: {
         id: pushToken.id,
@@ -58,7 +58,7 @@ router.post('/register', authenticateUser, async (req: Request, res: Response) =
       });
     }
 
-    res.status(500).json({ error: 'Failed to register device token' });
+    return res.status(500).json({ error: 'Failed to register device token' });
   }
 });
 
@@ -66,7 +66,7 @@ router.post('/register', authenticateUser, async (req: Request, res: Response) =
  * Deactivate device token
  * DELETE /api/push-notifications/deactivate
  */
-router.delete('/deactivate', authenticateUser, async (req: Request, res: Response) => {
+router.delete('/deactivate', authenticateToken, async (req: Request, res: Response) => {
   try {
     const { device_token } = req.body;
     const userId = req.user?.id;
@@ -83,13 +83,13 @@ router.delete('/deactivate', authenticateUser, async (req: Request, res: Respons
 
     await PushNotificationService.deactivateDeviceToken(userId, device_token);
 
-    res.json({
+    return res.json({
       success: true,
       message: 'Device token deactivated successfully'
     });
   } catch (error) {
     console.error('Error deactivating device token:', error);
-    res.status(500).json({ error: 'Failed to deactivate device token' });
+    return res.status(500).json({ error: 'Failed to deactivate device token' });
   }
 });
 
@@ -97,7 +97,7 @@ router.delete('/deactivate', authenticateUser, async (req: Request, res: Respons
  * Get user's push tokens
  * GET /api/push-notifications/tokens
  */
-router.get('/tokens', authenticateUser, async (req: Request, res: Response) => {
+router.get('/tokens', authenticateToken, async (req: Request, res: Response) => {
   try {
     const userId = req.user?.id;
 
@@ -121,7 +121,7 @@ router.get('/tokens', authenticateUser, async (req: Request, res: Response) => {
     });
   } catch (error) {
     console.error('Error fetching push tokens:', error);
-    res.status(500).json({ error: 'Failed to fetch push tokens' });
+    return res.status(500).json({ error: 'Failed to fetch push tokens' });
   }
 });
 
@@ -129,7 +129,7 @@ router.get('/tokens', authenticateUser, async (req: Request, res: Response) => {
  * Send test notification
  * POST /api/push-notifications/test
  */
-router.post('/test', authenticateUser, async (req: Request, res: Response) => {
+router.post('/test', authenticateToken, async (req: Request, res: Response) => {
   try {
     const { title, body } = req.body;
     const userId = req.user?.id;
@@ -159,7 +159,7 @@ router.post('/test', authenticateUser, async (req: Request, res: Response) => {
     });
   } catch (error) {
     console.error('Error sending test notification:', error);
-    res.status(500).json({ error: 'Failed to send test notification' });
+    return res.status(500).json({ error: 'Failed to send test notification' });
   }
 });
 
@@ -167,7 +167,7 @@ router.post('/test', authenticateUser, async (req: Request, res: Response) => {
  * Get push notification statistics (admin only)
  * GET /api/push-notifications/stats
  */
-router.get('/stats', authenticateUser, async (req: Request, res: Response) => {
+router.get('/stats', authenticateToken, async (req: Request, res: Response) => {
   try {
     // TODO: Add admin role check
     const stats = await PushNotificationService.getStatistics();
@@ -178,7 +178,7 @@ router.get('/stats', authenticateUser, async (req: Request, res: Response) => {
     });
   } catch (error) {
     console.error('Error fetching push notification stats:', error);
-    res.status(500).json({ error: 'Failed to fetch statistics' });
+    return res.status(500).json({ error: 'Failed to fetch statistics' });
   }
 });
 
@@ -186,7 +186,7 @@ router.get('/stats', authenticateUser, async (req: Request, res: Response) => {
  * Clean up old push tokens (admin only)
  * POST /api/push-notifications/cleanup
  */
-router.post('/cleanup', authenticateUser, async (req: Request, res: Response) => {
+router.post('/cleanup', authenticateToken, async (req: Request, res: Response) => {
   try {
     // TODO: Add admin role check
     const result = await PushNotificationService.cleanupTokens();
@@ -200,7 +200,7 @@ router.post('/cleanup', authenticateUser, async (req: Request, res: Response) =>
     });
   } catch (error) {
     console.error('Error cleaning up push tokens:', error);
-    res.status(500).json({ error: 'Failed to clean up tokens' });
+    return res.status(500).json({ error: 'Failed to clean up tokens' });
   }
 });
 
@@ -208,7 +208,7 @@ router.post('/cleanup', authenticateUser, async (req: Request, res: Response) =>
  * Handle notification action (called by mobile apps)
  * POST /api/push-notifications/action
  */
-router.post('/action', authenticateUser, async (req: Request, res: Response) => {
+router.post('/action', authenticateToken, async (req: Request, res: Response) => {
   try {
     const { notification_id, action, task_id } = req.body;
     const userId = req.user?.id;
@@ -246,7 +246,7 @@ router.post('/action', authenticateUser, async (req: Request, res: Response) => 
       });
     }
 
-    res.status(500).json({ error: 'Failed to process notification action' });
+    return res.status(500).json({ error: 'Failed to process notification action' });
   }
 });
 

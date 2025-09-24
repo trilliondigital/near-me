@@ -4,12 +4,14 @@ import Foundation
 enum CacheKey: String {
     case tasks = "tasks.json"
     case places = "places.json"
+    case pois = "pois.json"
     case metadata = "metadata.json"
 }
 
 struct CacheMetadata: Codable {
     var lastTaskSyncAt: Date?
     var lastPlaceSyncAt: Date?
+    var lastPOISyncAt: Date?
 }
 
 // MARK: - LocalCache
@@ -70,6 +72,15 @@ final class LocalCache {
 
     func loadPlaces() -> [Place] {
         load([Place].self, for: .places) ?? []
+    }
+
+    // POIs
+    func savePOIs(_ pois: [POI]) {
+        save(pois, for: .pois)
+    }
+
+    func loadPOIs() -> [POI] {
+        load([POI].self, for: .pois) ?? []
     }
 
     func updateMetadata(_ transform: (inout CacheMetadata) -> Void) {

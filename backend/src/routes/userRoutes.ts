@@ -1,4 +1,4 @@
-import { Router } from 'express';
+import { Router, Request, Response } from 'express';
 import { User } from '../models/User';
 import { authenticateToken } from '../middleware/auth';
 import { validateSchema, updateUserSchema, ValidationError } from '../models/validation';
@@ -6,10 +6,18 @@ import { UpdateUserRequest } from '../models/types';
 
 const router = Router();
 
+type AuthenticatedRequest = Request & {
+  user?: {
+    id: string;
+    email?: string;
+    roles?: string[];
+  };
+};
+
 /**
  * Get current user profile
  */
-router.get('/profile', authenticateToken, async (req, res) => {
+router.get('/profile', authenticateToken, async (req: AuthenticatedRequest, res: Response) => {
   try {
     const userId = req.user?.id;
     if (!userId) {
@@ -36,7 +44,7 @@ router.get('/profile', authenticateToken, async (req, res) => {
     });
   } catch (error) {
     console.error('Error fetching user profile:', error);
-    res.status(500).json({
+    return res.status(500).json({
       success: false,
       message: 'Internal server error',
       timestamp: new Date().toISOString()
@@ -47,7 +55,7 @@ router.get('/profile', authenticateToken, async (req, res) => {
 /**
  * Update user profile
  */
-router.put('/profile', authenticateToken, async (req, res) => {
+router.put('/profile', authenticateToken, async (req: AuthenticatedRequest, res: Response) => {
   try {
     const userId = req.user?.id;
     if (!userId) {
@@ -87,7 +95,7 @@ router.put('/profile', authenticateToken, async (req, res) => {
     }
 
     console.error('Error updating user profile:', error);
-    res.status(500).json({
+    return res.status(500).json({
       success: false,
       message: 'Internal server error',
       timestamp: new Date().toISOString()
@@ -98,7 +106,7 @@ router.put('/profile', authenticateToken, async (req, res) => {
 /**
  * Get task limit status for current user
  */
-router.get('/task-limit', authenticateToken, async (req, res) => {
+router.get('/task-limit', authenticateToken, async (req: AuthenticatedRequest, res: Response) => {
   try {
     const userId = req.user?.id;
     if (!userId) {
@@ -134,7 +142,7 @@ router.get('/task-limit', authenticateToken, async (req, res) => {
     });
   } catch (error) {
     console.error('Error fetching task limit:', error);
-    res.status(500).json({
+    return res.status(500).json({
       success: false,
       message: 'Internal server error',
       timestamp: new Date().toISOString()
@@ -145,7 +153,7 @@ router.get('/task-limit', authenticateToken, async (req, res) => {
 /**
  * Start premium trial
  */
-router.post('/start-trial', authenticateToken, async (req, res) => {
+router.post('/start-trial', authenticateToken, async (req: AuthenticatedRequest, res: Response) => {
   try {
     const userId = req.user?.id;
     if (!userId) {
@@ -192,7 +200,7 @@ router.post('/start-trial', authenticateToken, async (req, res) => {
     }
 
     console.error('Error starting trial:', error);
-    res.status(500).json({
+    return res.status(500).json({
       success: false,
       message: 'Internal server error',
       timestamp: new Date().toISOString()
@@ -203,7 +211,7 @@ router.post('/start-trial', authenticateToken, async (req, res) => {
 /**
  * Upgrade to premium
  */
-router.post('/upgrade-premium', authenticateToken, async (req, res) => {
+router.post('/upgrade-premium', authenticateToken, async (req: AuthenticatedRequest, res: Response) => {
   try {
     const userId = req.user?.id;
     if (!userId) {
@@ -235,7 +243,7 @@ router.post('/upgrade-premium', authenticateToken, async (req, res) => {
     });
   } catch (error) {
     console.error('Error upgrading to premium:', error);
-    res.status(500).json({
+    return res.status(500).json({
       success: false,
       message: 'Internal server error',
       timestamp: new Date().toISOString()
@@ -246,7 +254,7 @@ router.post('/upgrade-premium', authenticateToken, async (req, res) => {
 /**
  * Associate email with account
  */
-router.post('/associate-email', authenticateToken, async (req, res) => {
+router.post('/associate-email', authenticateToken, async (req: AuthenticatedRequest, res: Response) => {
   try {
     const userId = req.user?.id;
     if (!userId) {
@@ -294,7 +302,7 @@ router.post('/associate-email', authenticateToken, async (req, res) => {
     }
 
     console.error('Error associating email:', error);
-    res.status(500).json({
+    return res.status(500).json({
       success: false,
       message: 'Internal server error',
       timestamp: new Date().toISOString()
@@ -305,7 +313,7 @@ router.post('/associate-email', authenticateToken, async (req, res) => {
 /**
  * Get premium features list
  */
-router.get('/premium-features', authenticateToken, async (req, res) => {
+router.get('/premium-features', authenticateToken, async (req: AuthenticatedRequest, res: Response) => {
   try {
     const userId = req.user?.id;
     if (!userId) {
@@ -371,7 +379,7 @@ router.get('/premium-features', authenticateToken, async (req, res) => {
     });
   } catch (error) {
     console.error('Error fetching premium features:', error);
-    res.status(500).json({
+    return res.status(500).json({
       success: false,
       message: 'Internal server error',
       timestamp: new Date().toISOString()

@@ -1,4 +1,4 @@
-  # Implementation Plan
+# Implementation Plan
 
 ## Phase 1: Foundation and Core Infrastructure
 
@@ -137,16 +137,14 @@
   - _Requirements: 2.1, 2.2, 2.3, 2.5, 2.6, 3.1, 3.2_
 
 - [x] 15. Build notification UI and interaction handling
-  - Implement notification display with custom actions
   - Create in-app notification history and management
   - Build snooze and mute controls with duration selection
   - Implement notification settings and preferences UI
   - Create notification permission education and request flows
   - Write tests for notification UI interactions and state management
   - _Requirements: 5.4, 5.5, 5.6, 5.7_
-
 ## Phase 6: Onboarding and User Experience
-
+- [x] 16. Implement onboarding and permission flows
   - Implement permission request flows with clear explanations and benefits
   - Create onboarding preview showing how notifications will appear
   - Build seed task examples and quick-add functionality for common scenarios
@@ -157,7 +155,7 @@
   - Create empty state designs with helpful examples and quick actions
   - Implement contextual help and tooltips throughout the app
   - Build user education flows for advanced features
-  - Create troubleshooting guides for common issues (permissions, battery optimization)
+{{ ... }}
   - Add progressive disclosure for complex features
   - Write tests for empty state interactions and help system functionality
   - _Requirements: 6.6, 8.5_

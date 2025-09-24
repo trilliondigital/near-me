@@ -38,6 +38,7 @@ export interface UpdateNotificationHistoryRequest {
   attempts?: number;
   lastAttempt?: Date;
   errorMessage?: string;
+  scheduledTime?: Date;
 }
 
 export class NotificationHistory {
@@ -209,6 +210,11 @@ export class NotificationHistory {
     if (data.errorMessage !== undefined) {
       updates.push(`error_message = $${paramIndex++}`);
       values.push(data.errorMessage);
+    }
+
+    if (data.scheduledTime !== undefined) {
+      updates.push(`scheduled_time = $${paramIndex++}`);
+      values.push(data.scheduledTime);
     }
 
     if (updates.length === 0) {

@@ -38,6 +38,11 @@ jobs:
       working-directory: android
       run: chmod +x gradlew
     
+    - name: Run formatting check (Spotless)
+      working-directory: android
+      run: ./gradlew spotlessCheck
+      continue-on-error: true
+
     - name: Run lint
       working-directory: android
       run: ./gradlew lint

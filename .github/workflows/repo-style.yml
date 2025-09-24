@@ -1,0 +1,37 @@
+name: Repo Style
+
+on:
+  push:
+    branches: [ main, develop ]
+    paths:
+      - '**/*.md'
+      - '**/*.mdx'
+      - '**/*.yml'
+      - '**/*.yaml'
+      - '**/*.json'
+      - '.prettierrc'
+      - '.prettierignore'
+  pull_request:
+    branches: [ main, develop ]
+    paths:
+      - '**/*.md'
+      - '**/*.mdx'
+      - '**/*.yml'
+      - '**/*.yaml'
+      - '**/*.json'
+      - '.prettierrc'
+      - '.prettierignore'
+
+jobs:
+  prettier:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+
+      - name: Prettier Check
+        run: npx --yes prettier@3.3.3 --check .

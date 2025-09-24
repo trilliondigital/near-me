@@ -1,0 +1,17 @@
+# Normalize line endings to LF for all text files
+* text=auto eol=lf
+
+# Treat these as binary to avoid line ending conversions
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.pdf binary
+*.heic binary
+*.zip binary
+
+# Xcode project files often merge better with union strategy
+*.pbxproj merge=union
+
+# Ensure shell scripts have LF endings
+*.sh text eol=lf

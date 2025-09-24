@@ -63,9 +63,14 @@ class GeofenceService: ObservableObject {
         placeId: String,
         customRadii: GeofenceRadii?
     ) throws {
-        // In a real implementation, this would fetch place details from a service
-        // For now, using mock coordinates
-        let coordinate = CLLocationCoordinate2D(latitude: 37.7749, longitude: -122.4194)
+        // Use cached place details for offline support
+        let coordinate: CLLocationCoordinate2D
+        if let place = PlaceService.shared.getCachedPlace(by: placeId) {
+            coordinate = place.coordinate
+        } else {
+            // Fallback to default mock coordinate if not cached
+            coordinate = CLLocationCoordinate2D(latitude: 37.7749, longitude: -122.4194)
+        }
         
         let radii = customRadii ?? getDefaultRadiiForCustomPlace()
         
@@ -103,9 +108,15 @@ class GeofenceService: ObservableObject {
         taskId: String,
         category: POICategory
     ) throws {
-        // In a real implementation, this would find nearby POIs of the specified category
-        // For now, using mock coordinates for demonstration
-        let nearbyPOIs = getMockPOIsForCategory(category)
+        // Prefer cached POIs for offline support; fall back to mock data
+        let cached = POIService.shared.getCachedPOIs(categoryRaw: category.rawValue)
+        let nearbyPOIs: [MockPOI]
+        if !cached.isEmpty {
+            nearbyPOIs = cached.map { poi in MockPOI(coordinate: poi.coordinate) }
+        } else {
+            // Fallback to mock coordinates if no cached data
+            nearbyPOIs = getMockPOIsForCategory(category)
+        }
         
         for (index, poi) in nearbyPOIs.enumerated() {
             // Register tiered geofences for each POI

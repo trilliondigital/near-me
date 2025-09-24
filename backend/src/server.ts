@@ -15,33 +15,79 @@ import {
   apiRateLimit,
   speedLimiter
 } from './middleware/security';
-import { authRoutes } from './routes/auth';
-import { taskRoutes } from './routes/tasks';
-import { placeRoutes } from './routes/places';
-import { poiRoutes } from './routes/poi';
-import { geofenceRoutes } from './routes/geofences';
 import { healthRoutes } from './routes/health';
-import userRoutes from './routes/userRoutes';
-import notificationRoutes from './routes/notifications';
-import notificationPersistenceRoutes from './routes/notificationPersistence';
-import notificationManagerRoutes from './routes/notificationManager';
-import backgroundProcessorRoutes from './routes/backgroundProcessor';
-import pushNotificationRoutes from './routes/pushNotifications';
-import subscriptionRoutes from './routes/subscriptions';
-import privacyRoutes from './routes/privacy';
-import performanceRoutes from './routes/performance';
-import analyticsRoutes from './routes/analytics';
-import dashboardRoutes from './routes/dashboard';
-import feedbackRoutes from './routes/feedback';
-import monitoringRoutes from './routes/monitoring';
 import { requestMetrics } from './middleware/requestMetrics';
 import { BackgroundProcessor } from './services/backgroundProcessor';
 import { PushNotificationService } from './services/pushNotificationService';
 import { analyticsManager } from './services/analyticsManager';
 import { SubscriptionExpirationService } from './services/subscriptionExpirationService';
+import { initializeDatabase, initializeRedis } from './database/connection';
 
 // Load environment variables
 dotenv.config();
+
+// Initialize database/redis before wiring routes
+function getDatabaseConfig() {
+  const url = process.env.DATABASE_URL;
+  if (url) {
+    try {
+      const u = new URL(url);
+      return {
+        host: u.hostname,
+        port: Number(u.port || 5432),
+        database: (u.pathname || '').replace(/^\//, ''),
+        user: decodeURIComponent(u.username || ''),
+        password: decodeURIComponent(u.password || ''),
+        ssl: false,
+      } as const;
+    } catch (_) {
+      // Fall through to discrete envs
+    }
+  }
+  return {
+    host: process.env.DATABASE_HOST || 'localhost',
+    port: Number(process.env.DATABASE_PORT || 5432),
+    database: process.env.DATABASE_NAME || 'nearme',
+    user: process.env.DATABASE_USER || 'postgres',
+    password: process.env.DATABASE_PASSWORD || 'postgres',
+    ssl: false,
+  } as const;
+}
+
+function getRedisConfig() {
+  const url = process.env.REDIS_URL;
+  if (url) {
+    try {
+      const u = new URL(url);
+      return {
+        host: u.hostname,
+        port: Number(u.port || 6379),
+        db: Number((u.pathname || '').replace(/^\//, '') || 0),
+        password: decodeURIComponent(u.password || ''),
+      } as any;
+    } catch (_) {
+      // Fall through
+    }
+  }
+  return {
+    host: process.env.REDIS_HOST || 'localhost',
+    port: Number(process.env.REDIS_PORT || 6379),
+    password: process.env.REDIS_PASSWORD,
+    db: 0,
+  } as any;
+}
+
+// Initialize DB synchronously; Redis asynchronously
+try {
+  initializeDatabase(getDatabaseConfig());
+  console.log('🗄️  Database pool initialized');
+} catch (err) {
+  console.error('❌ Failed to initialize database pool:', err);
+}
+
+initializeRedis(getRedisConfig())
+  .then(() => console.log('🧠 Redis client initialized'))
+  .catch((err) => console.warn('⚠️  Redis initialization failed (continuing):', (err as any)?.message || err));
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -80,24 +126,49 @@ app.use(requestMetrics);
 
 // API routes
 app.use('/api/health', healthRoutes);
-app.use('/api/auth', authRoutes);
-app.use('/api/user', userRoutes);
-app.use('/api/tasks', taskRoutes);
-app.use('/api/places', placeRoutes);
-app.use('/api/poi', poiRoutes);
-app.use('/api/geofences', geofenceRoutes);
-app.use('/api/notifications', notificationRoutes);
-app.use('/api/notifications/persistence', notificationPersistenceRoutes);
-app.use('/api/notifications/manager', notificationManagerRoutes);
-app.use('/api/push-notifications', pushNotificationRoutes);
-app.use('/api/subscriptions', subscriptionRoutes);
-app.use('/api/privacy', privacyRoutes);
-app.use('/api/performance', performanceRoutes);
-app.use('/api/analytics', analyticsRoutes);
-app.use('/api/dashboard', dashboardRoutes);
-app.use('/api/background', backgroundProcessorRoutes);
-app.use('/api/feedback', feedbackRoutes);
-app.use('/api/monitoring', monitoringRoutes);
+
+const ENABLE_FULL_ROUTES = process.env.ENABLE_FULL_ROUTES === 'true';
+if (ENABLE_FULL_ROUTES) {
+  const { authRoutes } = require('./routes/auth');
+  const userRoutes = require('./routes/userRoutes').default;
+  const { taskRoutes } = require('./routes/tasks');
+  const { placeRoutes } = require('./routes/places');
+  const { poiRoutes } = require('./routes/poi');
+  const { geofenceRoutes } = require('./routes/geofences');
+  const notificationRoutes = require('./routes/notifications').default;
+  const notificationPersistenceRoutes = require('./routes/notificationPersistence').default;
+  const notificationManagerRoutes = require('./routes/notificationManager').default;
+  const pushNotificationRoutes = require('./routes/pushNotifications').default;
+  const subscriptionRoutes = require('./routes/subscriptions').default;
+  const privacyRoutes = require('./routes/privacy').default;
+  const performanceRoutes = require('./routes/performance').default;
+  const analyticsRoutes = require('./routes/analytics').default;
+  const dashboardRoutes = require('./routes/dashboard').default;
+  const backgroundProcessorRoutes = require('./routes/backgroundProcessor').default;
+  const feedbackRoutes = require('./routes/feedback').default;
+  const monitoringRoutes = require('./routes/monitoring').default;
+
+  app.use('/api/auth', authRoutes);
+  app.use('/api/user', userRoutes);
+  app.use('/api/tasks', taskRoutes);
+  app.use('/api/places', placeRoutes);
+  app.use('/api/poi', poiRoutes);
+  app.use('/api/geofences', geofenceRoutes);
+  app.use('/api/notifications', notificationRoutes);
+  app.use('/api/notifications/persistence', notificationPersistenceRoutes);
+  app.use('/api/notifications/manager', notificationManagerRoutes);
+  app.use('/api/push-notifications', pushNotificationRoutes);
+  app.use('/api/subscriptions', subscriptionRoutes);
+  app.use('/api/privacy', privacyRoutes);
+  app.use('/api/performance', performanceRoutes);
+  app.use('/api/analytics', analyticsRoutes);
+  app.use('/api/dashboard', dashboardRoutes);
+  app.use('/api/background', backgroundProcessorRoutes);
+  app.use('/api/feedback', feedbackRoutes);
+  app.use('/api/monitoring', monitoringRoutes);
+} else {
+  console.log('🧪 Running in minimal route mode. Set ENABLE_FULL_ROUTES=true to enable full API.');
+}
 
 // Error handling middleware
 app.use(notFoundHandler);
